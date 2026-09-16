@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -57,6 +58,29 @@ export class RecruitersController {
     @Body() dto: AddCandidateToShortlistDto,
   ) {
     return this.recruitersService.addCandidateToShortlist(recruiterId, shortlistId, dto);
+  }
+
+  @Delete('shortlists/:id/candidates/:candidateId')
+  @ApiOperation({ summary: 'Remove a candidate from a shortlist' })
+  async removeCandidateFromShortlist(
+    @CurrentUser('id') recruiterId: string,
+    @Param('id') shortlistId: string,
+    @Param('candidateId') candidateId: string,
+  ) {
+    return this.recruitersService.removeCandidateFromShortlist(
+      recruiterId,
+      shortlistId,
+      candidateId,
+    );
+  }
+
+  @Delete('shortlists/:id')
+  @ApiOperation({ summary: 'Delete a shortlist' })
+  async deleteShortlist(
+    @CurrentUser('id') recruiterId: string,
+    @Param('id') shortlistId: string,
+  ) {
+    return this.recruitersService.deleteShortlist(recruiterId, shortlistId);
   }
 
   @Post('opportunities')

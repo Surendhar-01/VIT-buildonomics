@@ -80,6 +80,21 @@ export class RecruitersService {
         lists.push({ ...sl, candidates });
       }
     }
+
+    // Auto-create default shortlist if none exists so recruiter always has an active list
+    if (lists.length === 0) {
+      const defaultList = {
+        id: uuidv4(),
+        recruiter_id: recruiterId,
+        name: 'Top Engineering Prospects',
+        description: 'Vetted candidates saved for active engineering roles',
+        created_at: new Date().toISOString(),
+      };
+      this.db.inMemory.shortlists.set(defaultList.id, defaultList);
+      this.db.inMemory.shortlistedCandidates.set(defaultList.id, []);
+      lists.push({ ...defaultList, candidates: [] });
+    }
+
     return lists;
   }
 
@@ -107,13 +122,26 @@ export class RecruitersService {
       throw new NotFoundException('Shortlist not found');
     }
 
-    const candidateProfile = this.db.inMemory.profiles.get(dto.candidateId);
+    let candidateProfile: any = null;
+    if (this.db.isUsingSupabase && this.db.client) {
+      const { data } = await this.db.client
+        .from('profiles')
+        .select('*')
+        .or(`id.eq.${dto.candidateId},user_id.eq.${dto.candidateId}`)
+        .single();
+      candidateProfile = data;
+    }
+    if (!candidateProfile) {
+      candidateProfile = this.db.inMemory.profiles.get(dto.candidateId);
+    }
+
     const entry = {
       id: uuidv4(),
       shortlist_id: shortlistId,
       candidate_id: dto.candidateId,
       candidate_name: candidateProfile?.full_name || 'Candidate',
-      candidate_headline: candidateProfile?.headline || 'Engineer',
+      candidate_headline: candidateProfile?.headline || 'Software Engineer',
+      candidate_slug: candidateProfile?.slug || candidateProfile?.id,
       notes: dto.notes || '',
       status: 'reviewing',
       created_at: new Date().toISOString(),
@@ -129,6 +157,25 @@ export class RecruitersService {
       candidateId: dto.candidateId,
     });
     return entry;
+  }
+
+  async removeCandidateFromShortlist(
+    recruiterId: string,
+    shortlistId: string,
+    candidateId: string,
+  ) {
+    const list = this.db.inMemory.shortlistedCandidates.get(shortlistId) || [];
+    const filtered = list.filter(
+      (item) => item.candidate_id !== candidateId && item.id !== candidateId,
+    );
+    this.db.inMemory.shortlistedCandidates.set(shortlistId, filtered);
+    return { success: true, message: 'Candidate removed from shortlist.' };
+  }
+
+  async deleteShortlist(recruiterId: string, shortlistId: string) {
+    this.db.inMemory.shortlists.delete(shortlistId);
+    this.db.inMemory.shortlistedCandidates.delete(shortlistId);
+    return { success: true, message: 'Shortlist deleted.' };
   }
 
   async sendOpportunityRequest(recruiterId: string, dto: OpportunityRequestDto) {

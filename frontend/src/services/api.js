@@ -307,6 +307,18 @@ class ApiService {
     });
   }
 
+  async removeCandidateFromShortlist(shortlistId, candidateId) {
+    return this.request(`/recruiters/shortlists/${shortlistId}/candidates/${candidateId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteShortlist(shortlistId) {
+    return this.request(`/recruiters/shortlists/${shortlistId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Admin
   async getAdminAnalytics() {
     return this.request('/admin/analytics');
