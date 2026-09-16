@@ -270,10 +270,12 @@ export default function ShortlistsPage() {
 
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Link
-                    to="/recruiter"
+                    to={cand.candidate_slug ? `/p/${cand.candidate_slug}` : (cand.candidate_id ? `/p/${cand.candidate_id}` : '/recruiter')}
+                    target="_blank"
+                    rel="noreferrer"
                     className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs flex items-center gap-1.5 transition-colors"
                   >
-                    <span>View Talent Card</span>
+                    <span>View Portfolio</span>
                     <ExternalLink className="w-3 h-3" />
                   </Link>
 

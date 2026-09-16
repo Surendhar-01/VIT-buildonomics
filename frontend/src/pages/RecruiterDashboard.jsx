@@ -63,26 +63,46 @@ export default function RecruiterDashboard() {
     }
   };
 
+  const [savingShortlist, setSavingShortlist] = useState(false);
+
+  const handleOpenAddModal = (candidate) => {
+    setSelectedCandidate(candidate);
+    setNotes('');
+    if (!selectedShortlistId && shortlists.length > 0) {
+      setSelectedShortlistId(shortlists[0].id);
+    }
+  };
+
   const handleAddToShortlist = async (candidate) => {
+    if (savingShortlist) return;
+    setSavingShortlist(true);
     try {
       let targetListId = selectedShortlistId;
       if (!targetListId) {
-        const created = await api.createShortlist({
-          name: 'General Candidate Shortlist',
-          description: 'Top verified technical prospects',
-        });
-        targetListId = created.id;
-        setShortlists([...shortlists, created]);
-        setSelectedShortlistId(created.id);
+        if (shortlists.length > 0) {
+          targetListId = shortlists[0].id;
+        } else {
+          const created = await api.createShortlist({
+            name: 'Top Engineering Prospects',
+            description: 'Vetted candidates saved for active engineering roles',
+          });
+          targetListId = created.id;
+        }
       }
 
       await api.addCandidateToShortlist(targetListId, candidate.id, notes || 'Verified candidate');
-      setActionMessage(`Added ${candidate.full_name} to shortlist!`);
-      setTimeout(() => setActionMessage(''), 3000);
+      setActionMessage(`Added ${candidate.full_name} to shortlist pipeline!`);
+      setTimeout(() => setActionMessage(''), 4000);
       setSelectedCandidate(null);
       setNotes('');
+
+      // Refresh shortlists from API so counts and pipeline lists update immediately
+      const refreshed = await api.getShortlists().catch(() => []);
+      setShortlists(refreshed);
     } catch (err) {
-      alert(err.message);
+      alert(err.message || 'Failed to add candidate to shortlist');
+    } finally {
+      setSavingShortlist(false);
     }
   };
 
@@ -143,9 +163,18 @@ export default function RecruiterDashboard() {
       </div>
 
       {actionMessage && (
-        <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          {actionMessage}
+        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2 font-medium">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{actionMessage}</span>
+          </div>
+          <Link
+            to="/recruiter/shortlists"
+            className="text-emerald-700 hover:text-emerald-900 font-semibold underline underline-offset-2 ml-4 flex items-center gap-1 shrink-0"
+          >
+            <span>View Saved Shortlists</span>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
         </div>
       )}
 
@@ -284,7 +313,7 @@ export default function RecruiterDashboard() {
                 </Link>
 
                 <Button
-                  onClick={() => setSelectedCandidate(c)}
+                  onClick={() => handleOpenAddModal(c)}
                   variant="secondary"
                   size="sm"
                   icon={BookmarkPlus}
@@ -308,16 +337,16 @@ export default function RecruiterDashboard() {
             {shortlists.length > 0 && (
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Target Shortlist
+                  Target Shortlist Pipeline
                 </label>
                 <select
-                  value={selectedShortlistId}
+                  value={selectedShortlistId || (shortlists[0]?.id || '')}
                   onChange={(e) => setSelectedShortlistId(e.target.value)}
-                  className="w-full bg-slate-50 text-slate-800 text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full bg-slate-50 text-slate-800 text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
                 >
                   {shortlists.map((sl) => (
                     <option key={sl.id} value={sl.id}>
-                      {sl.name}
+                      {sl.name} ({sl.candidates ? sl.candidates.length : 0} candidate{sl.candidates?.length === 1 ? '' : 's'})
                     </option>
                   ))}
                 </select>
@@ -338,15 +367,24 @@ export default function RecruiterDashboard() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="ghost" size="sm" onClick={() => setSelectedCandidate(null)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedCandidate(null);
+                  setNotes('');
+                }}
+                disabled={savingShortlist}
+              >
                 Cancel
               </Button>
               <Button
                 variant="success"
                 size="sm"
                 onClick={() => handleAddToShortlist(selectedCandidate)}
+                disabled={savingShortlist}
               >
-                Confirm & Save
+                {savingShortlist ? 'Saving...' : 'Confirm & Save'}
               </Button>
             </div>
           </div>

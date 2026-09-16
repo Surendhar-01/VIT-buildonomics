@@ -136,44 +136,141 @@ export class RecruitersService {
     return results;
   }
 
+  private isUuid(str: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+  }
+
+  private readonly DEMO_RECRUITER_UUID = '00000000-0000-0000-0000-000000000002';
+
   async getShortlists(recruiterId: string) {
-    const lists: any[] = [];
-    for (const sl of this.db.inMemory.shortlists.values()) {
-      if (sl.recruiter_id === recruiterId) {
-        const candidates = this.db.inMemory.shortlistedCandidates.get(sl.id) || [];
-        lists.push({ ...sl, candidates });
+    const validRecruiterId = this.isUuid(recruiterId) ? recruiterId : this.DEMO_RECRUITER_UUID;
+    let lists: any[] = [];
+
+    if (this.db.isUsingSupabase && this.db.client) {
+      try {
+        const { data, error } = await this.db.client
+          .from('recruiter_shortlists')
+          .select('*, shortlisted_candidates(*, profiles(*))')
+          .eq('recruiter_id', validRecruiterId)
+          .order('created_at', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          lists = data.map((sl: any) => ({
+            id: sl.id,
+            recruiter_id: sl.recruiter_id,
+            name: sl.name,
+            description: sl.description || '',
+            created_at: sl.created_at,
+            candidates: (sl.shortlisted_candidates || []).map((sc: any) => ({
+              id: sc.id,
+              shortlist_id: sc.shortlist_id,
+              candidate_id: sc.candidate_id,
+              candidate_name: sc.profiles?.full_name || 'Candidate',
+              candidate_headline: sc.profiles?.headline || 'Software Engineer',
+              candidate_slug: sc.profiles?.full_name
+                ? sc.profiles.full_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+                : sc.candidate_id,
+              notes: sc.notes || '',
+              status: sc.status || 'reviewing',
+              created_at: sc.created_at,
+              profile: sc.profiles,
+            })),
+          }));
+        } else if (!error && (!data || data.length === 0)) {
+          // Auto-create default shortlist in Supabase
+          const { data: created, error: cErr } = await this.db.client
+            .from('recruiter_shortlists')
+            .insert({
+              recruiter_id: validRecruiterId,
+              name: 'Top Engineering Prospects',
+              description: 'Vetted candidates saved for active engineering roles',
+            })
+            .select()
+            .single();
+
+          if (!cErr && created) {
+            lists.push({
+              ...created,
+              candidates: [],
+            });
+          }
+        }
+      } catch (dbErr) {
+        console.error('Error fetching shortlists from Supabase:', dbErr);
       }
     }
 
-    // Auto-create default shortlist if none exists so recruiter always has an active list
+    // Fallback to in-memory if Supabase yielded nothing or wasn't available
     if (lists.length === 0) {
-      const defaultList = {
-        id: uuidv4(),
-        recruiter_id: recruiterId,
-        name: 'Top Engineering Prospects',
-        description: 'Vetted candidates saved for active engineering roles',
-        created_at: new Date().toISOString(),
-      };
-      this.db.inMemory.shortlists.set(defaultList.id, defaultList);
-      this.db.inMemory.shortlistedCandidates.set(defaultList.id, []);
-      lists.push({ ...defaultList, candidates: [] });
+      for (const sl of this.db.inMemory.shortlists.values()) {
+        if (sl.recruiter_id === validRecruiterId || sl.recruiter_id === recruiterId) {
+          const candidates = this.db.inMemory.shortlistedCandidates.get(sl.id) || [];
+          lists.push({ ...sl, candidates });
+        }
+      }
+
+      if (lists.length === 0) {
+        const defaultList = {
+          id: uuidv4(),
+          recruiter_id: validRecruiterId,
+          name: 'Top Engineering Prospects',
+          description: 'Vetted candidates saved for active engineering roles',
+          created_at: new Date().toISOString(),
+        };
+        this.db.inMemory.shortlists.set(defaultList.id, defaultList);
+        this.db.inMemory.shortlistedCandidates.set(defaultList.id, []);
+        lists.push({ ...defaultList, candidates: [] });
+      }
+    }
+
+    // Sync to in-memory cache for ultra-fast fallback access
+    for (const sl of lists) {
+      this.db.inMemory.shortlists.set(sl.id, sl);
+      this.db.inMemory.shortlistedCandidates.set(sl.id, sl.candidates || []);
     }
 
     return lists;
   }
 
   async createShortlist(recruiterId: string, dto: CreateShortlistDto) {
-    const id = uuidv4();
-    const shortlist = {
-      id,
-      recruiter_id: recruiterId,
-      name: dto.name,
-      description: dto.description || '',
-      created_at: new Date().toISOString(),
-    };
-    this.db.inMemory.shortlists.set(id, shortlist);
-    this.db.inMemory.shortlistedCandidates.set(id, []);
-    return shortlist;
+    const validRecruiterId = this.isUuid(recruiterId) ? recruiterId : this.DEMO_RECRUITER_UUID;
+    let shortlist: any = null;
+
+    if (this.db.isUsingSupabase && this.db.client) {
+      try {
+        const { data, error } = await this.db.client
+          .from('recruiter_shortlists')
+          .insert({
+            recruiter_id: validRecruiterId,
+            name: dto.name,
+            description: dto.description || '',
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          shortlist = data;
+        } else if (error) {
+          console.error('Failed to insert recruiter_shortlists:', error);
+        }
+      } catch (err) {
+        console.error('Supabase createShortlist error:', err);
+      }
+    }
+
+    if (!shortlist) {
+      shortlist = {
+        id: uuidv4(),
+        recruiter_id: validRecruiterId,
+        name: dto.name,
+        description: dto.description || '',
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    this.db.inMemory.shortlists.set(shortlist.id, shortlist);
+    this.db.inMemory.shortlistedCandidates.set(shortlist.id, []);
+    return { ...shortlist, candidates: [] };
   }
 
   async addCandidateToShortlist(
@@ -181,44 +278,184 @@ export class RecruitersService {
     shortlistId: string,
     dto: AddCandidateToShortlistDto,
   ) {
-    const sl = this.db.inMemory.shortlists.get(shortlistId);
-    if (!sl) {
-      throw new NotFoundException('Shortlist not found');
+    const validRecruiterId = this.isUuid(recruiterId) ? recruiterId : this.DEMO_RECRUITER_UUID;
+    let activeShortlist = this.db.inMemory.shortlists.get(shortlistId);
+
+    // Resolve shortlist from Supabase if not found in memory
+    if (!activeShortlist && this.db.isUsingSupabase && this.db.client && this.isUuid(shortlistId)) {
+      const { data: slData } = await this.db.client
+        .from('recruiter_shortlists')
+        .select('*')
+        .eq('id', shortlistId)
+        .maybeSingle();
+      if (slData) {
+        activeShortlist = slData;
+        this.db.inMemory.shortlists.set(slData.id, slData);
+      }
     }
 
+    // If still not found, ensure a shortlist exists for this recruiter
+    if (!activeShortlist) {
+      if (this.db.isUsingSupabase && this.db.client) {
+        const { data: existingLists } = await this.db.client
+          .from('recruiter_shortlists')
+          .select('*')
+          .eq('recruiter_id', validRecruiterId)
+          .limit(1);
+
+        if (existingLists && existingLists.length > 0) {
+          activeShortlist = existingLists[0];
+          shortlistId = activeShortlist.id;
+        } else {
+          const { data: created } = await this.db.client
+            .from('recruiter_shortlists')
+            .insert({
+              recruiter_id: validRecruiterId,
+              name: 'Top Engineering Prospects',
+              description: 'Vetted candidates saved for active engineering roles',
+            })
+            .select()
+            .single();
+          if (created) {
+            activeShortlist = created;
+            shortlistId = created.id;
+          }
+        }
+      }
+    }
+
+    if (!activeShortlist) {
+      activeShortlist = {
+        id: shortlistId || uuidv4(),
+        recruiter_id: validRecruiterId,
+        name: 'Top Engineering Prospects',
+        description: 'Vetted candidates saved for active engineering roles',
+        created_at: new Date().toISOString(),
+      };
+      shortlistId = activeShortlist.id;
+      this.db.inMemory.shortlists.set(shortlistId, activeShortlist);
+    }
+
+    // Resolve candidate profile and ensure we have their profiles(id) UUID
     let candidateProfile: any = null;
-    if (this.db.isUsingSupabase && this.db.client) {
-      const { data } = await this.db.client
+    let targetProfileId = dto.candidateId;
+
+    if (this.db.isUsingSupabase && this.db.client && this.isUuid(dto.candidateId)) {
+      const { data: pData } = await this.db.client
         .from('profiles')
         .select('*')
         .or(`id.eq.${dto.candidateId},user_id.eq.${dto.candidateId}`)
-        .single();
-      candidateProfile = data;
+        .maybeSingle();
+
+      if (pData) {
+        candidateProfile = pData;
+        targetProfileId = pData.id;
+      }
     }
+
     if (!candidateProfile) {
       candidateProfile = this.db.inMemory.profiles.get(dto.candidateId);
+      if (candidateProfile) {
+        targetProfileId = candidateProfile.id;
+      }
+    }
+
+    let savedEntryId = uuidv4();
+    let savedCreatedAt = new Date().toISOString();
+
+    // Persist to Supabase shortlisted_candidates
+    if (
+      this.db.isUsingSupabase &&
+      this.db.client &&
+      this.isUuid(shortlistId) &&
+      this.isUuid(targetProfileId)
+    ) {
+      try {
+        // Ensure shortlist exists in DB
+        const { data: checkSl } = await this.db.client
+          .from('recruiter_shortlists')
+          .select('id')
+          .eq('id', shortlistId)
+          .maybeSingle();
+
+        if (!checkSl) {
+          await this.db.client.from('recruiter_shortlists').insert({
+            id: shortlistId,
+            recruiter_id: validRecruiterId,
+            name: activeShortlist.name || 'Top Engineering Prospects',
+            description: activeShortlist.description || '',
+          });
+        }
+
+        // Check for existing candidate entry in this shortlist
+        const { data: existing } = await this.db.client
+          .from('shortlisted_candidates')
+          .select('*')
+          .eq('shortlist_id', shortlistId)
+          .eq('candidate_id', targetProfileId)
+          .maybeSingle();
+
+        if (existing) {
+          const { data: updated } = await this.db.client
+            .from('shortlisted_candidates')
+            .update({
+              notes: dto.notes !== undefined ? dto.notes : existing.notes,
+              status: 'reviewing',
+            })
+            .eq('id', existing.id)
+            .select()
+            .single();
+
+          if (updated) {
+            savedEntryId = updated.id;
+            savedCreatedAt = updated.created_at;
+          }
+        } else {
+          const { data: inserted, error: insErr } = await this.db.client
+            .from('shortlisted_candidates')
+            .insert({
+              shortlist_id: shortlistId,
+              candidate_id: targetProfileId,
+              notes: dto.notes || '',
+              status: 'reviewing',
+            })
+            .select()
+            .single();
+
+          if (!insErr && inserted) {
+            savedEntryId = inserted.id;
+            savedCreatedAt = inserted.created_at;
+          } else if (insErr) {
+            console.error('Failed to insert candidate into Supabase shortlisted_candidates:', insErr);
+          }
+        }
+      } catch (saveErr) {
+        console.error('Error persisting shortlisted candidate to Supabase:', saveErr);
+      }
     }
 
     const entry = {
-      id: uuidv4(),
+      id: savedEntryId,
       shortlist_id: shortlistId,
-      candidate_id: dto.candidateId,
+      candidate_id: targetProfileId,
       candidate_name: candidateProfile?.full_name || 'Candidate',
       candidate_headline: candidateProfile?.headline || 'Software Engineer',
-      candidate_slug: candidateProfile?.slug || candidateProfile?.id,
+      candidate_slug: candidateProfile?.full_name
+        ? candidateProfile.full_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+        : targetProfileId,
       notes: dto.notes || '',
       status: 'reviewing',
-      created_at: new Date().toISOString(),
+      created_at: savedCreatedAt,
+      profile: candidateProfile,
     };
 
     const list = this.db.inMemory.shortlistedCandidates.get(shortlistId) || [];
-    // prevent duplicate
-    const filtered = list.filter((item) => item.candidate_id !== dto.candidateId);
+    const filtered = list.filter((item) => item.candidate_id !== targetProfileId);
     filtered.push(entry);
     this.db.inMemory.shortlistedCandidates.set(shortlistId, filtered);
 
     this.db.logAudit(recruiterId, 'SHORTLIST_CANDIDATE', 'shortlist', shortlistId, {
-      candidateId: dto.candidateId,
+      candidateId: targetProfileId,
     });
     return entry;
   }
@@ -228,6 +465,20 @@ export class RecruitersService {
     shortlistId: string,
     candidateId: string,
   ) {
+    if (this.db.isUsingSupabase && this.db.client && this.isUuid(shortlistId)) {
+      try {
+        if (this.isUuid(candidateId)) {
+          await this.db.client
+            .from('shortlisted_candidates')
+            .delete()
+            .eq('shortlist_id', shortlistId)
+            .or(`id.eq.${candidateId},candidate_id.eq.${candidateId}`);
+        }
+      } catch (err) {
+        console.error('Failed to remove shortlisted candidate from Supabase:', err);
+      }
+    }
+
     const list = this.db.inMemory.shortlistedCandidates.get(shortlistId) || [];
     const filtered = list.filter(
       (item) => item.candidate_id !== candidateId && item.id !== candidateId,
@@ -237,6 +488,21 @@ export class RecruitersService {
   }
 
   async deleteShortlist(recruiterId: string, shortlistId: string) {
+    if (this.db.isUsingSupabase && this.db.client && this.isUuid(shortlistId)) {
+      try {
+        await this.db.client
+          .from('shortlisted_candidates')
+          .delete()
+          .eq('shortlist_id', shortlistId);
+        await this.db.client
+          .from('recruiter_shortlists')
+          .delete()
+          .eq('id', shortlistId);
+      } catch (err) {
+        console.error('Failed to delete shortlist from Supabase:', err);
+      }
+    }
+
     this.db.inMemory.shortlists.delete(shortlistId);
     this.db.inMemory.shortlistedCandidates.delete(shortlistId);
     return { success: true, message: 'Shortlist deleted.' };
