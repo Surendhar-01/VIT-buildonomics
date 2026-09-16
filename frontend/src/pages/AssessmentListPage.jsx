@@ -136,7 +136,7 @@ export default function AssessmentListPage() {
 
   // If user HAS uploaded a resume:
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in pb-12">
+    <div className="w-full space-y-8 animate-in fade-in pb-12">
       {/* Resume Tailoring Header & Detected Skills */}
       <div className="rounded-3xl bg-white border border-indigo-100 p-6 sm:p-8 space-y-4 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
