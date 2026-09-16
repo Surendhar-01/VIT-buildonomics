@@ -288,6 +288,47 @@ export class AiService {
   }
 
   async analyzeResume(dto: AnalyzeResumeDto) {
+    let cleanText = dto.resumeText || '';
+
+    // Check if input is a PDF (base64 DataURL, raw stream, or file ending in .pdf)
+    const isPdf =
+      cleanText.startsWith('data:application/pdf') ||
+      cleanText.includes('base64,') ||
+      cleanText.startsWith('%PDF') ||
+      (dto.fileName && dto.fileName.toLowerCase().endsWith('.pdf'));
+
+    if (isPdf) {
+      try {
+        const pdfParse = require('pdf-parse');
+        let buffer: Buffer;
+        if (cleanText.includes('base64,')) {
+          const b64 = cleanText.split('base64,')[1];
+          buffer = Buffer.from(b64, 'base64');
+        } else if (cleanText.startsWith('%PDF')) {
+          buffer = Buffer.from(cleanText, 'binary');
+        } else {
+          try {
+            buffer = Buffer.from(cleanText, 'base64');
+          } catch {
+            buffer = Buffer.from(cleanText);
+          }
+        }
+
+        if (buffer && buffer.length > 20) {
+          const pdfData = await pdfParse(buffer);
+          if (pdfData && pdfData.text && pdfData.text.trim().length > 20) {
+            cleanText = pdfData.text;
+          }
+        }
+      } catch (pdfErr) {
+        this.logger.warn(`PDF parse error: ${pdfErr.message}, falling back to ASCII stream filtering`);
+        cleanText = cleanText.replace(/[^\x20-\x7E\t\r\n]/g, ' ').replace(/\s+/g, ' ');
+      }
+    } else {
+      // Clean non-printable characters from plain text
+      cleanText = cleanText.replace(/[^\x20-\x7E\t\r\n]/g, ' ').replace(/\s+/g, ' ');
+    }
+
     if (this.hasApiKey) {
       try {
         const prompt = `You are an elite technical talent scout and AI resume parser.
@@ -315,7 +356,7 @@ Analyze the following resume text and extract the candidate details into strictl
 }
 
 Resume Text:
-${dto.resumeText.slice(0, 9000)}`;
+${cleanText.slice(0, 10000)}`;
 
         const raw = await this.callLlm(prompt, 'You are an elite technical recruiter and AI parser. Output strictly valid JSON.');
         const cleaned = raw.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
@@ -334,17 +375,22 @@ ${dto.resumeText.slice(0, 9000)}`;
     }
 
     // Heuristic fallback parser
-    const text = dto.resumeText;
+    const text = cleanText;
     const commonSkills = [
       'JavaScript', 'TypeScript', 'React', 'Node.js', 'Python', 'PostgreSQL',
-      'Docker', 'Tailwind CSS', 'Next.js', 'MongoDB', 'Git', 'REST API', 'C++', 'Java'
+      'Docker', 'Tailwind CSS', 'Next.js', 'MongoDB', 'Git', 'REST API', 'C++', 'Java',
+      'HTML', 'CSS', 'SQL', 'FastAPI', 'Express', 'NestJS', 'Redux', 'AWS'
     ];
     const foundSkills = commonSkills.filter((s) => new RegExp(`\\b${s}\\b`, 'i').test(text));
 
+    // Try extracting candidate name from first few lines or filename
+    const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 2 && l.length < 40);
+    const candidateName = lines[0] || (dto.fileName ? dto.fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Candidate');
+
     return {
-      fullName: text.match(/([A-Z][a-z]+ [A-Z][a-z]+)/)?.[1] || 'Candidate',
-      headline: 'Full-Stack Software Engineer',
-      bio: 'Enthusiastic software engineer with a strong track record of building reliable digital applications and solving algorithmic problems.',
+      fullName: candidateName,
+      headline: foundSkills.some((s) => ['React', 'Node.js', 'Full Stack'].includes(s)) ? 'Full-Stack Software Engineer' : 'Software Engineer',
+      bio: 'Enthusiastic software engineer with demonstrated problem-solving skills and a strong passion for building reliable digital applications.',
       skills: foundSkills.length > 0 ? foundSkills : ['JavaScript', 'React', 'Node.js', 'PostgreSQL'],
       education: 'B.Tech in Computer Science and Engineering',
       institution: 'Vellore Institute of Technology',
@@ -353,7 +399,7 @@ ${dto.resumeText.slice(0, 9000)}`;
       projects: [
         {
           title: 'Full-Stack Web Platform',
-          technologies: ['React', 'Node.js', 'PostgreSQL'],
+          technologies: foundSkills.slice(0, 3).length > 0 ? foundSkills.slice(0, 3) : ['React', 'Node.js'],
           description: 'Engineered modular web application with relational data modeling and real-time state management.',
         }
       ],

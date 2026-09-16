@@ -72,22 +72,26 @@ export default function StudentDashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check size limit (15MB)
+    if (file.size > 15 * 1024 * 1024) {
+      setAnalysisError('File exceeds 15MB limit. Please choose a smaller PDF or text file.');
+      return;
+    }
+
     setUploadedFileName(file.name);
     setAnalysisError('');
 
     try {
-      // If it's a text-based file or markdown, read directly
-      if (file.name.endsWith('.txt') || file.name.endsWith('.md') || file.name.endsWith('.json')) {
+      if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.md') || file.name.endsWith('.json')) {
         const text = await file.text();
         setResumeText(text);
       } else {
-        // For PDF or DOCX files, attempt FileReader text read
-        const text = await file.text().catch(() => '');
-        if (text && text.length > 50) {
-          setResumeText(text);
-        } else {
-          setResumeText(`Candidate Resume File: ${file.name} (${Math.round(file.size / 1024)} KB)`);
-        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const content = event.target?.result;
+          setResumeText(content || '');
+        };
+        reader.readAsDataURL(file);
       }
     } catch (err) {
       console.error('Error reading file:', err);
@@ -95,7 +99,7 @@ export default function StudentDashboard() {
     }
   };
 
-  // Call Backend Groq LLM Resume Analyzer
+  // Call Backend Gemini/Groq LLM Resume Analyzer
   const handleAnalyzeResume = async () => {
     if (!resumeText.trim()) {
       setAnalysisError('Please select a resume file or paste your resume text first.');
@@ -105,7 +109,7 @@ export default function StudentDashboard() {
     setIsAnalyzing(true);
     setAnalysisError('');
     try {
-      const result = await api.analyzeResume(resumeText, uploadedFileName || 'uploaded-resume.txt');
+      const result = await api.analyzeResume(resumeText, uploadedFileName || 'uploaded-resume.pdf');
       setParsedData(result);
     } catch (err) {
       setAnalysisError(err.message || 'Failed to analyze resume. Please try again.');
@@ -121,8 +125,11 @@ export default function StudentDashboard() {
     setIsApplying(true);
     setAnalysisError('');
     try {
-      await api.applyResumeData(parsedData);
-      setSuccessBanner(`Resume parsed successfully! ${parsedData.skills?.length || 0} skills and ${parsedData.projects?.length || 0} projects applied to your profile.`);
+      await api.applyResumeData({
+        ...parsedData,
+        resumeFileName: uploadedFileName || 'verified-resume.pdf',
+      });
+      setSuccessBanner(`Resume verified! ${parsedData.skills?.length || 0} skills & projects applied. Tailored problem-solving benchmarks unlocked!`);
       setParsedData(null);
       setResumeText('');
       setUploadedFileName('');

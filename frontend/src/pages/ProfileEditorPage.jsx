@@ -101,6 +101,11 @@ export default function ProfileEditorPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 15 * 1024 * 1024) {
+      setAnalysisError('File exceeds 15MB limit. Please choose a smaller PDF or text file.');
+      return;
+    }
+
     setUploadedFileName(file.name);
     setAnalysisError('');
     try {
@@ -111,12 +116,9 @@ export default function ProfileEditorPage() {
         const reader = new FileReader();
         reader.onload = (event) => {
           const content = event.target?.result;
-          if (typeof content === 'string') {
-            const printable = content.replace(/[^\x20-\x7E\t\r\n]/g, ' ').replace(/\s+/g, ' ');
-            setResumeText(printable.slice(0, 9000));
-          }
+          setResumeText(content || '');
         };
-        reader.readAsText(file);
+        reader.readAsDataURL(file);
       }
     } catch (err) {
       console.error('File reading error:', err);
