@@ -47,6 +47,14 @@ export class AssessmentsController {
     return this.assessmentsService.getAttemptResult(attemptId);
   }
 
+  @Get('recommended')
+  @UseGuards(SupabaseAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get personalized assessment recommendations based on resume skills' })
+  async getRecommendedAssessments(@CurrentUser('id') userId: string) {
+    return this.assessmentsService.getPersonalizedRecommendations(userId);
+  }
+
   @Get(':id')
   @Public()
   @ApiOperation({ summary: 'Get assessment details with problem list' })
@@ -87,34 +95,5 @@ export class AssessmentsController {
     @Body() dto: CreateAssessmentDto,
   ) {
     return this.assessmentsService.createAssessment(dto, userId);
-  }
-
-  @Get('recommended')
-  @UseGuards(SupabaseAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get personalized assessment recommendations based on profile skills' })
-  async getRecommendedAssessments(@CurrentUser('id') userId: string) {
-    const profile = await this.assessmentsService.getProfileWithSkills(userId);
-    const skills = profile?.skills?.map((s: any) => s.name) || [];
-    const targetRole = profile?.headline || 'Full-Stack Software Engineer';
-
-    const recommendations = await this.aiService.recommendAssessmentsFromResume({
-      skills,
-      targetRole,
-    });
-
-    const assessments = await this.assessmentsService.getAssessmentsByCategories(
-      recommendations.map((r: any) => r.category)
-    );
-
-    return assessments.map((a: any) => {
-      const rec = recommendations.find((r: any) => r.category === a.category);
-      return {
-        ...a,
-        recommendationReason: rec?.reason,
-        priority: rec?.priority,
-        matchedSkills: rec?.matchedSkills,
-      };
-    });
   }
 }

@@ -29,8 +29,7 @@ export default function StudentDashboard() {
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [credentials, setCredentials] = useState([]);
-  const [assessments, setAssessments] = useState([]);
-  const [recommendedAssessments, setRecommendedAssessments] = useState([]);
+  const [recommendedData, setRecommendedData] = useState({ unlocked: false, assessments: [], problems: [] });
   const [projectsCount, setProjectsCount] = useState(0);
   const [selectedQR, setSelectedQR] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,17 +46,15 @@ export default function StudentDashboard() {
 
   const loadData = async () => {
     try {
-      const [profData, credData, assessData, projData, recData] = await Promise.all([
+      const [profData, credData, projData, recData] = await Promise.all([
         api.getMyProfile().catch(() => null),
         api.getMyCredentials().catch(() => []),
-        api.getAssessments().catch(() => []),
         api.getMyProjects().catch(() => []),
-        api.getRecommendedAssessments().catch(() => []),
+        api.getRecommendedAssessments().catch(() => ({ unlocked: false, assessments: [], problems: [] })),
       ]);
       setProfile(profData);
       setCredentials(credData);
-      setAssessments(assessData);
-      setRecommendedAssessments(recData);
+      setRecommendedData(recData || { unlocked: false, assessments: [], problems: [] });
       setProjectsCount(projData?.length || 0);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -455,113 +452,76 @@ export default function StudentDashboard() {
         )}
       </div>
 
-      {/* AI Personalized Assessment Recommendations */}
-      {recommendedAssessments.length > 0 && (
-        <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm animate-in fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold mb-2">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                AI Personalized for You
-              </div>
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-                Recommended Assessments Based on Your Skills
-              </h2>
-              <p className="text-xs text-slate-600">
-                These assessments match your resume skills and target role. Higher priority = better skill alignment.
-              </p>
-            </div>
-            <Badge variant="brand" className="text-xs self-start sm:self-auto">
-              {recommendedAssessments.length} Matches
-            </Badge>
-          </div>
-
-          <div className="space-y-3">
-            {recommendedAssessments.slice(0, 4).map((a) => (
-              <div
-                key={a.id}
-                className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200 hover:border-amber-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-slate-900">{a.title}</span>
-                    <Badge variant="brand" className="text-[10px]">{a.category}</Badge>
-                    <Badge 
-                      variant={a.difficulty === 'advanced' ? 'error' : a.difficulty === 'intermediate' ? 'warning' : 'success'} 
-                      className="text-[10px]"
-                    >
-                      {a.difficulty}
-                    </Badge>
-                    {a.priority === 'critical' && (
-                      <Badge variant="error" className="text-[10px] animate-pulse">Critical Match</Badge>
-                    )}
-                    {a.priority === 'high' && !a.priority === 'critical' && (
-                      <Badge variant="warning" className="text-[10px]">High Match</Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-600 line-clamp-1">{a.recommendationReason || a.description}</p>
-                  {a.matchedSkills?.length > 0 && (
-                    <div className="text-[11px] text-amber-800 font-medium flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" />
-                      Matched from your skills: {a.matchedSkills.slice(0, 5).join(', ')}
-                    </div>
-                  )}
-                </div>
-
-                <Link to={`/assessments/${a.id}`}>
-                  <Button variant="primary" size="sm" icon={ArrowRight}>
-                    Start Test
-                  </Button>
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Main Content Grid: Assessments & Credentials */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recommended Coding Challenges */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Automated Benchmark Assessments</h2>
-              <p className="text-xs text-slate-600">Evaluated securely in isolated sandbox runtimes</p>
-            </div>
-            <Link to="/assessments" className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold">
-              View All →
-            </Link>
-          </div>
-
-          <div className="space-y-3">
-            {assessments.slice(0, 3).map((a) => (
-              <div
-                key={a.id}
-                className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-900">{a.title}</span>
-                    <Badge variant="brand" className="text-[10px]">{a.category}</Badge>
-                  </div>
-                  <p className="text-xs text-slate-600 line-clamp-1">{a.description}</p>
-                  <div className="flex items-center gap-3 text-[11px] text-slate-500 pt-1">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      {Math.round(a.duration_seconds / 60)} mins
-                    </span>
-                    <span className="capitalize text-indigo-600 font-medium">{a.difficulty}</span>
-                  </div>
-                </div>
-
-                <Link to={`/assessments/${a.id}`}>
-                  <Button variant="primary" size="sm" icon={ArrowRight}>
-                    Start Test
-                  </Button>
-                </Link>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold mb-1">
+                <Sparkles className="w-3 h-3 text-emerald-600" />
+                {recommendedData.unlocked ? 'Tailored to Resume' : 'Resume Required'}
               </div>
-            ))}
+              <h2 className="text-base font-bold text-slate-900">Problem-Solving Benchmarks</h2>
+              <p className="text-xs text-slate-600">
+                {recommendedData.unlocked
+                  ? 'Coding benchmarks matched directly to your verified resume skills'
+                  : 'Isolated sandbox benchmarks unlocked after resume upload'}
+              </p>
+            </div>
+            {recommendedData.unlocked && (
+              <Link to="/assessments" className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold">
+                View All ({recommendedData.assessments.length}) →
+              </Link>
+            )}
           </div>
+
+          {recommendedData.unlocked && recommendedData.assessments.length > 0 ? (
+            <div className="space-y-3">
+              {recommendedData.assessments.slice(0, 3).map((a) => (
+                <div
+                  key={a.id}
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-slate-900">{a.title}</span>
+                      <Badge variant="brand" className="text-[10px]">{a.category}</Badge>
+                      <span className="capitalize text-indigo-700 text-xs font-medium">{a.difficulty}</span>
+                    </div>
+                    <p className="text-xs text-slate-600 line-clamp-1">{a.description}</p>
+                    {a.matchedSkills && a.matchedSkills.length > 0 && (
+                      <div className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Matched from resume: {a.matchedSkills.join(', ')}
+                      </div>
+                    )}
+                  </div>
+
+                  <Link to={`/assessments/${a.id}`}>
+                    <Button variant="primary" size="sm" icon={ArrowRight}>
+                      Start Test
+                    </Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 px-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 space-y-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+                <Clock className="w-5 h-5" />
+              </div>
+              <h4 className="text-xs font-bold text-slate-800">Problem-Solving Benchmarks Locked</h4>
+              <p className="text-[11px] text-slate-600 max-w-sm mx-auto">
+                Problem-solving assessments are personalized to your actual technical stack. Upload your resume in your Profile to unlock your tailored benchmarks.
+              </p>
+              <Link to="/profile">
+                <Button variant="primary" size="sm" icon={FileText}>
+                  Go to Profile & Upload Resume
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Digital Credentials Wallet Preview */}

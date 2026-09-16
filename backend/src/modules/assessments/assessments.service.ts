@@ -30,7 +30,18 @@ export class AssessmentsService {
         list.push(ma);
       }
     }
-    return list;
+
+    // Deduplicate assessments by normalized title
+    const seenTitles = new Set<string>();
+    const deduplicatedList: any[] = [];
+    for (const a of list) {
+      const normTitle = (a.title || '').trim().toLowerCase();
+      if (!seenTitles.has(normTitle)) {
+        seenTitles.add(normTitle);
+        deduplicatedList.push(a);
+      }
+    }
+    return deduplicatedList;
   }
 
   async getAssessmentById(id: string) {
@@ -260,26 +271,211 @@ export class AssessmentsService {
     if (this.db.isUsingSupabase && this.db.client) {
       const { data } = await this.db.client
         .from('profiles')
-        .select('*, profile_skills(*, skills(*))')
-        .eq('user_id', userId)
+        .select('id, user_id, headline, full_name, resume_url')
+        .or(`user_id.eq.${userId},id.eq.${userId}`)
         .single();
       profile = data;
 
-      if (profile && profile.profile_skills) {
-        profile.skills = profile.profile_skills.map((ps: any) => ps.skills).filter(Boolean);
+      if (profile) {
+        const { data: ps } = await this.db.client
+          .from('profile_skills')
+          .select('proficiency_level, evidence_description, verified, skills(name, category)')
+          .eq('profile_id', profile.id);
+
+        profile.skills = (ps || []).map((item: any) => ({
+          name: item.skills?.name || 'Skill',
+          category: item.skills?.category || 'general',
+          proficiency_level: item.proficiency_level,
+          evidence_description: item.evidence_description,
+          verified: item.verified,
+        }));
       }
     } else {
-      profile = this.db.inMemory.profiles.get(userId);
+      profile =
+        this.db.inMemory.profiles.get(userId) ||
+        Array.from(this.db.inMemory.profiles.values()).find((p) => p.user_id === userId);
       if (profile) {
-        const profileSkills = this.db.inMemory.profileSkills.get(userId) || [];
+        const profileSkills =
+          this.db.inMemory.profileSkills.get(profile.id) ||
+          this.db.inMemory.profileSkills.get(userId) ||
+          [];
         profile.skills = profileSkills.map((ps: any) => {
           const skill = this.db.inMemory.skills.get(ps.skill_id);
-          return skill ? { ...skill, proficiency_level: ps.proficiency_level } : null;
-        }).filter(Boolean);
+          return skill
+            ? { ...skill, proficiency_level: ps.proficiency_level }
+            : { name: ps.skill_name || 'Skill' };
+        });
       }
     }
 
     return profile;
+  }
+
+  async getPersonalizedRecommendations(userId: string) {
+    const profile = await this.getProfileWithSkills(userId);
+    const hasUploadedResume = Boolean(profile?.resume_url && profile.resume_url.trim().length > 0);
+    const rawSkills = profile?.skills || [];
+    const skillNames = rawSkills
+      .map((s: any) => s?.skill_name || s?.name || (typeof s === 'string' ? s : ''))
+      .filter(Boolean);
+
+    // If candidate has NOT uploaded a resume OR has no skills extracted from resume:
+    if (!hasUploadedResume || skillNames.length === 0) {
+      return {
+        hasResume: false,
+        unlocked: false,
+        message: 'No resume uploaded yet. In your profile page, please upload your resume to unlock problem-solving assessments tailored to your skills.',
+        candidateSkills: [],
+        assessments: [],
+        problems: [],
+      };
+    }
+
+    const allAssessments = await this.getAllAssessments();
+
+    // Fetch problems from DB/in-memory
+    let allProblems: any[] = [];
+    if (this.db.isUsingSupabase && this.db.client) {
+      const { data } = await this.db.client
+        .from('coding_problems')
+        .select('*')
+        .eq('status', 'published');
+      allProblems = data || [];
+    }
+    const memProblems = Array.from(this.db.inMemory.codingProblems.values()).filter(
+      (p) => p.status === 'published',
+    );
+    const existingProblemIds = new Set(allProblems.map((p) => p.id));
+    for (const mp of memProblems) {
+      if (!existingProblemIds.has(mp.id)) {
+        allProblems.push(mp);
+      }
+    }
+
+    const lowerSkills = skillNames.map((s: string) => s.toLowerCase());
+
+    const matchedAssessments = allAssessments
+      .map((a: any) => {
+        const cat = (a.category || '').toLowerCase();
+        const title = (a.title || '').toLowerCase();
+        const desc = (a.description || '').toLowerCase();
+
+        const matched: string[] = [];
+        lowerSkills.forEach((s: string) => {
+          if (cat.includes(s) || title.includes(s) || desc.includes(s)) {
+            matched.push(s);
+          } else if (
+            (s.includes('sql') || s.includes('postgres') || s.includes('mysql') || s.includes('database')) &&
+            (cat.includes('sql') || cat.includes('database') || title.includes('sql') || title.includes('database'))
+          ) {
+            matched.push(s);
+          } else if (
+            (s.includes('react') ||
+              s.includes('vue') ||
+              s.includes('angular') ||
+              s.includes('frontend') ||
+              s.includes('javascript') ||
+              s.includes('typescript')) &&
+            (cat.includes('frontend') || title.includes('frontend'))
+          ) {
+            matched.push(s);
+          } else if (
+            (s.includes('node') ||
+              s.includes('express') ||
+              s.includes('nest') ||
+              s.includes('backend') ||
+              s.includes('redis') ||
+              s.includes('python') ||
+              s.includes('api')) &&
+            (cat.includes('backend') || title.includes('backend'))
+          ) {
+            matched.push(s);
+          } else if (
+            (s.includes('algorithm') ||
+              s.includes('data structure') ||
+              s.includes('java') ||
+              s.includes('c++') ||
+              s.includes('c#') ||
+              s.includes('python')) &&
+            (cat.includes('full stack') || title.includes('algorithmic'))
+          ) {
+            matched.push(s);
+          }
+        });
+
+        const uniqueMatched = Array.from(new Set(matched));
+        if (uniqueMatched.length > 0) {
+          return {
+            ...a,
+            isRecommended: true,
+            matchedSkills: uniqueMatched,
+            recommendationReason: `Matched from your resume: ${uniqueMatched.join(', ')}`,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Deduplicate matched assessments by title
+    const seenAssessTitles = new Set<string>();
+    const deduplicatedAssessments: any[] = [];
+    for (const a of matchedAssessments) {
+      const norm = (a.title || '').trim().toLowerCase();
+      if (!seenAssessTitles.has(norm)) {
+        seenAssessTitles.add(norm);
+        deduplicatedAssessments.push(a);
+      }
+    }
+
+    const matchedProblems = allProblems
+      .map((p: any) => {
+        const cat = (p.category || '').toLowerCase();
+        const title = (p.title || '').toLowerCase();
+        const desc = (p.description || '').toLowerCase();
+
+        const matched: string[] = [];
+        lowerSkills.forEach((s: string) => {
+          if (cat.includes(s) || title.includes(s) || desc.includes(s)) {
+            matched.push(s);
+          } else if ((s.includes('sql') || s.includes('postgres')) && cat.includes('sql')) {
+            matched.push(s);
+          } else if (
+            (s.includes('react') || s.includes('javascript') || s.includes('frontend')) &&
+            cat.includes('frontend')
+          ) {
+            matched.push(s);
+          } else if (
+            (s.includes('node') || s.includes('backend') || s.includes('redis')) &&
+            (cat.includes('backend') || cat.includes('system'))
+          ) {
+            matched.push(s);
+          } else if (
+            (s.includes('algorithm') || s.includes('two sum') || s.includes('stack')) &&
+            cat.includes('algorithm')
+          ) {
+            matched.push(s);
+          }
+        });
+
+        const uniqueMatched = Array.from(new Set(matched));
+        if (uniqueMatched.length > 0) {
+          return {
+            ...p,
+            isRecommended: true,
+            matchedSkills: uniqueMatched,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    return {
+      hasResume: true,
+      unlocked: true,
+      candidateSkills: skillNames,
+      assessments: deduplicatedAssessments,
+      problems: matchedProblems,
+    };
   }
 
   async getAssessmentsByCategories(categories: string[]) {

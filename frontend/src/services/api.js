@@ -95,6 +95,12 @@ class ApiService {
     });
   }
 
+  async clearResume() {
+    return this.request('/profiles/me/resume', {
+      method: 'DELETE',
+    });
+  }
+
   async getPublicProfile(id) {
     return this.request(`/profiles/${id}`);
   }

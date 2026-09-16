@@ -376,8 +376,11 @@ ${dto.resumeText.slice(0, 9000)}`;
       experience,
       skills = [],
       projects = [],
+      resumeFileName,
+      resumeUrl,
     } = data;
 
+    const fileRef = resumeFileName || resumeUrl || 'verified_resume.pdf';
     let profileId = userId;
 
     if (this.db.isUsingSupabase && this.db.client) {
@@ -385,7 +388,7 @@ ${dto.resumeText.slice(0, 9000)}`;
       const { data: prof } = await this.db.client
         .from('profiles')
         .select('id')
-        .eq('user_id', userId)
+        .or(`user_id.eq.${userId},id.eq.${userId}`)
         .single();
 
       if (prof) {
@@ -399,6 +402,7 @@ ${dto.resumeText.slice(0, 9000)}`;
             institution: institution || undefined,
             graduation_year: graduationYear || undefined,
             experience: experience || undefined,
+            resume_url: fileRef,
             updated_at: new Date().toISOString(),
           })
           .eq('id', prof.id);
@@ -413,9 +417,10 @@ ${dto.resumeText.slice(0, 9000)}`;
           .single();
 
         if (!existingSkill) {
+          const category = this.normalizeCategory(skillName);
           const { data: newSkill } = await this.db.client
             .from('skills')
-            .insert({ name: skillName, category: 'technical' })
+            .insert({ name: skillName, category })
             .select()
             .single();
           existingSkill = newSkill;
@@ -460,6 +465,7 @@ ${dto.resumeText.slice(0, 9000)}`;
         institution: institution || existing.institution,
         graduation_year: graduationYear || existing.graduation_year,
         experience: experience || existing.experience,
+        resume_url: fileRef,
       };
       this.db.inMemory.profiles.set(userId, updated);
 
@@ -648,5 +654,18 @@ ${dto.resumeText.slice(0, 9000)}`;
 
   private priorityScore(p: string): number {
     return { critical: 4, high: 3, medium: 2, low: 1 }[p] || 0;
+  }
+
+  private normalizeCategory(name: string): string {
+    const n = name.toLowerCase();
+    if (n.includes('react') || n.includes('vue') || n.includes('angular') || n.includes('css') || n.includes('html') || n.includes('tailwind') || n.includes('frontend')) return 'frontend';
+    if (n.includes('node') || n.includes('express') || n.includes('nest') || n.includes('django') || n.includes('spring') || n.includes('fastapi') || n.includes('api') || n.includes('backend')) return 'backend';
+    if (n.includes('sql') || n.includes('postgres') || n.includes('mongo') || n.includes('database') || n.includes('redis')) return 'database';
+    if (n.includes('ai') || n.includes('ml') || n.includes('machine') || n.includes('torch') || n.includes('tensor') || n.includes('llm')) return 'ai';
+    if (n.includes('aws') || n.includes('cloud') || n.includes('azure') || n.includes('gcp')) return 'cloud';
+    if (n.includes('docker') || n.includes('k8s') || n.includes('kubernetes') || n.includes('ci/cd') || n.includes('git')) return 'devops';
+    if (n.includes('react native') || n.includes('flutter') || n.includes('ios') || n.includes('android')) return 'mobile';
+    if (n.includes('javascript') || n.includes('typescript') || n.includes('python') || n.includes('java') || n.includes('c++') || n.includes('c#') || n.includes('golang') || n.includes('rust')) return 'languages';
+    return 'fundamentals';
   }
 }

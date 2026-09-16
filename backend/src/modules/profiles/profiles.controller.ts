@@ -58,6 +58,14 @@ export class ProfilesController {
     return this.profilesService.removeSkill(userId, skillId);
   }
 
+  @Delete('me/resume')
+  @UseGuards(SupabaseAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Clear candidate resume' })
+  async clearResume(@CurrentUser('id') userId: string) {
+    return this.profilesService.clearResume(userId);
+  }
+
   @Get(':id')
   @Public()
   @ApiOperation({ summary: 'Get public profile by ID or user ID' })

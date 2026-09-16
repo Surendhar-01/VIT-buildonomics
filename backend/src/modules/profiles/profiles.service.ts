@@ -254,4 +254,16 @@ export class ProfilesService {
     if (skills && skills.length >= 3) score += 20;
     return Math.min(100, score);
   }
+
+  async clearResume(userId: string) {
+    if (this.db.isUsingSupabase && this.db.client) {
+      await this.db.client
+        .from('profiles')
+        .update({ resume_url: null })
+        .or(`user_id.eq.${userId},id.eq.${userId}`);
+    }
+    const mem = this.db.inMemory.profiles.get(userId);
+    if (mem) mem.resume_url = null;
+    return { success: true, message: 'Resume cleared successfully.' };
+  }
 }
