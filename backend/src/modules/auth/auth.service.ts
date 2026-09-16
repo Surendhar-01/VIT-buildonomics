@@ -188,10 +188,33 @@ export class AuthService {
 
     // 2. Regular user authentication (Student, Recruiter, Issuer)
     if (this.db.isUsingSupabase && this.db.client) {
-      const { data, error } = await this.db.client.auth.signInWithPassword({
+      let { data, error } = await this.db.client.auth.signInWithPassword({
         email,
         password: dto.password,
       });
+
+      // If email is not confirmed, automatically confirm it using Supabase service-role admin API and retry
+      if (error && error.message && error.message.toLowerCase().includes('email not confirmed')) {
+        try {
+          const { data: usersList } = await this.db.client.auth.admin.listUsers();
+          const targetUser = usersList?.users?.find(
+            (u: any) => u.email?.toLowerCase() === email.toLowerCase(),
+          );
+          if (targetUser) {
+            await this.db.client.auth.admin.updateUserById(targetUser.id, {
+              email_confirm: true,
+            });
+            const retry = await this.db.client.auth.signInWithPassword({
+              email,
+              password: dto.password,
+            });
+            data = retry.data;
+            error = retry.error;
+          }
+        } catch (confirmErr) {
+          console.error('Failed to auto-confirm user email:', confirmErr);
+        }
+      }
 
       if (error) {
         throw new UnauthorizedException(error.message);
