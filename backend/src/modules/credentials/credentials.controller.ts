@@ -39,6 +39,16 @@ export class CredentialsController {
     return this.credentialsService.getMyCredentials(userId);
   }
 
+  @Get('issued')
+  @Roles('issuer', 'admin')
+  @ApiOperation({ summary: 'Get all credentials issued by current issuer or institution' })
+  async getIssuedCredentials(
+    @CurrentUser('id') issuerId: string,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.credentialsService.getIssuedCredentials(issuerId, role);
+  }
+
   @Get('templates')
   @ApiOperation({ summary: 'List credential templates for issuing' })
   async listTemplates() {

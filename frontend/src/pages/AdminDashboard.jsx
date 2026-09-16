@@ -98,7 +98,7 @@ export default function AdminDashboard() {
       </div>
 
       {statusMessage && (
-        <div className="p-3 rounded-2xl bg-indigo-950/60 border border-indigo-200 text-indigo-700 text-xs flex items-center gap-2">
+        <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           {statusMessage}
         </div>
@@ -204,8 +204,8 @@ export default function AdminDashboard() {
                         onClick={() => handleToggleUserStatus(u)}
                         className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
                           u.status === 'active'
-                            ? 'text-rose-600 hover:bg-rose-950/40 border-rose-900/50'
-                            : 'text-emerald-600 hover:bg-emerald-950/40 border-emerald-900/50'
+                            ? 'text-rose-600 hover:bg-rose-50 border-rose-200'
+                            : 'text-emerald-600 hover:bg-emerald-50 border-emerald-200'
                         }`}
                       >
                         {u.status === 'active' ? 'Suspend' : 'Restore'}

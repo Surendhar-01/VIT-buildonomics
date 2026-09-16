@@ -217,6 +217,10 @@ class ApiService {
     return this.request('/credentials/me');
   }
 
+  async getIssuedCredentials() {
+    return this.request('/credentials/issued');
+  }
+
   async getCredential(credentialId) {
     return this.request(`/credentials/${credentialId}`);
   }
@@ -285,7 +289,18 @@ class ApiService {
 
   // Recruiters
   async searchCandidates(filters = {}) {
-    const query = new URLSearchParams(filters).toString();
+    const cleanParams = {};
+    if (filters.query && typeof filters.query === 'string' && filters.query.trim()) {
+      cleanParams.query = filters.query.trim();
+    }
+    if (filters.skills) {
+      if (Array.isArray(filters.skills) && filters.skills.length > 0) {
+        cleanParams.skills = filters.skills.filter(Boolean).join(',');
+      } else if (typeof filters.skills === 'string' && filters.skills.trim() && filters.skills !== 'undefined') {
+        cleanParams.skills = filters.skills.trim();
+      }
+    }
+    const query = new URLSearchParams(cleanParams).toString();
     return this.request(`/recruiters/candidates${query ? '?' + query : ''}`);
   }
 

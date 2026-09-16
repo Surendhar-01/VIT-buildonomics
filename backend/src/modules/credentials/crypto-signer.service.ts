@@ -9,9 +9,17 @@ export class CryptoSignerService implements OnModuleInit {
   private publicKey: string;
   private keyId: string;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) {
+    this.initKeys();
+  }
 
   onModuleInit() {
+    this.initKeys();
+  }
+
+  public initKeys() {
+    if (this.privateKey && this.publicKey) return;
+
     this.keyId = this.configService.get<string>('CREDENTIAL_SIGNING_KEY_ID') || 'skillproof-ed25519-v1';
     
     const envPrivKey = this.configService.get<string>('CREDENTIAL_SIGNING_PRIVATE_KEY');
@@ -62,6 +70,7 @@ export class CryptoSignerService implements OnModuleInit {
    * Sign canonical payload using Ed25519
    */
   signPayload(payload: any): { signature: string; keyId: string; canonicalString: string } {
+    this.initKeys();
     const canonicalString = this.canonicalize(payload);
     const signature = crypto
       .sign(null, Buffer.from(canonicalString, 'utf8'), this.privateKey)
@@ -78,6 +87,7 @@ export class CryptoSignerService implements OnModuleInit {
    * Verify an Ed25519 digital signature against canonical payload
    */
   verifySignature(canonicalString: string, signature: string, publicKeyPem?: string): boolean {
+    this.initKeys();
     try {
       const pubKey = publicKeyPem || this.publicKey;
       return crypto.verify(

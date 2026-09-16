@@ -327,7 +327,9 @@ export class AssessmentsService {
     return profile;
   }
 
-  async getPersonalizedRecommendations(userId: string) {
+  async getPersonalizedRecommendations(userId: string, role?: string) {
+    const isStaffOrRecruiter = role && ['recruiter', 'admin', 'issuer'].includes(role.toLowerCase());
+
     const profile = await this.getProfileWithSkills(userId);
     const rawSkills = profile?.skills || [];
     const skillNames = rawSkills
@@ -339,8 +341,8 @@ export class AssessmentsService {
       skillNames.length > 0
     );
 
-    // If candidate has NOT uploaded a resume OR has no skills extracted:
-    if (!hasUploadedResume || skillNames.length === 0) {
+    // If candidate has NOT uploaded a resume OR has no skills extracted (and not recruiter/admin/issuer):
+    if (!isStaffOrRecruiter && (!hasUploadedResume || skillNames.length === 0)) {
       return {
         hasResume: false,
         unlocked: false,
@@ -370,6 +372,25 @@ export class AssessmentsService {
       if (!existingProblemIds.has(mp.id)) {
         allProblems.push(mp);
       }
+    }
+
+    if (isStaffOrRecruiter) {
+      return {
+        hasResume: true,
+        unlocked: true,
+        candidateSkills: ['Algorithms', 'Data Structures', 'Full-Stack', 'Relational Databases'],
+        assessments: allAssessments.map((a: any) => ({
+          ...a,
+          isRecommended: true,
+          matchedSkills: ['Core Engineering', 'Problem Solving'],
+          recommendationReason: 'Platform benchmark catalog entry',
+        })),
+        problems: allProblems.map((p: any) => ({
+          ...p,
+          isRecommended: true,
+          matchedSkills: [p.category || 'Algorithms'],
+        })),
+      };
     }
 
     const lowerSkills = skillNames.map((s: string) => s.toLowerCase());

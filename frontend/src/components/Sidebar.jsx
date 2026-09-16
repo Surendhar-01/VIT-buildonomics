@@ -60,7 +60,7 @@ export default function Sidebar() {
   else if (role === 'admin') navLinks = adminLinks;
 
   return (
-    <aside className="w-64 flex-shrink-0 hidden md:block bg-white border-r border-slate-200 p-4 min-h-[calc(100vh-4rem)]">
+    <aside className="fixed top-16 bottom-0 left-0 w-64 hidden md:block bg-white border-r border-slate-200 p-4 overflow-y-auto z-30">
       <div className="space-y-6">
         <div>
           <div className="px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">

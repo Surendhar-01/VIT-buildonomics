@@ -29,7 +29,9 @@ export class VerificationService {
           .single();
         revocation = revData;
       }
-    } else {
+    }
+
+    if (!cred) {
       cred = this.db.inMemory.credentials.get(credentialId);
       revocation = this.db.inMemory.credentialRevocations.get(credentialId);
     }
@@ -122,7 +124,9 @@ export class VerificationService {
         .eq('credential_id', credentialId)
         .single();
       cred = data;
-    } else {
+    }
+
+    if (!cred) {
       cred = this.db.inMemory.credentials.get(credentialId);
     }
 

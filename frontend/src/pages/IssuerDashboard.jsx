@@ -22,12 +22,13 @@ export default function IssuerDashboard() {
   const [selectedQR, setSelectedQR] = useState(null);
   const [showRevokeModal, setShowRevokeModal] = useState(null);
   const [revokeReason, setRevokeReason] = useState('');
+  const [candidates, setCandidates] = useState([]);
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
 
   // Issue Form State
   const [issueForm, setIssueForm] = useState({
-    recipientId: 'demo-student-uuid',
+    recipientId: '',
     title: 'Certified Algorithmic Problem Solver',
     description: 'Awarded for demonstrating optimal algorithmic execution in the Full-Stack Algorithmic Benchmark.',
     criteria: 'Achieved 100% test case pass rate with optimal O(N) runtime complexity.',
@@ -40,12 +41,17 @@ export default function IssuerDashboard() {
 
   async function loadData() {
     try {
-      const [creds, tmpls] = await Promise.all([
-        api.getMyCredentials().catch(() => []),
+      const [creds, tmpls, cands] = await Promise.all([
+        api.getIssuedCredentials().catch(() => api.getMyCredentials().catch(() => [])),
         api.getCredentialTemplates().catch(() => []),
+        api.searchCandidates().catch(() => []),
       ]);
       setCredentials(creds || []);
       setTemplates(tmpls || []);
+      setCandidates(cands || []);
+      if (cands && cands.length > 0 && !issueForm.recipientId) {
+        setIssueForm((prev) => ({ ...prev, recipientId: cands[0].id || cands[0].user_id }));
+      }
     } catch (err) {
       console.error('Issuer data load error:', err);
     }
@@ -104,7 +110,7 @@ export default function IssuerDashboard() {
       </div>
 
       {statusMessage && (
-        <div className="p-3 rounded-2xl bg-indigo-950/60 border border-indigo-200 text-indigo-700 text-xs flex items-center gap-2">
+        <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           {statusMessage}
         </div>
@@ -205,11 +211,25 @@ export default function IssuerDashboard() {
             <form onSubmit={handleIssueCredential} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Recipient User / Candidate ID
+                  Recipient Candidate
                 </label>
+                {candidates.length > 0 ? (
+                  <select
+                    value={issueForm.recipientId}
+                    onChange={(e) => setIssueForm({ ...issueForm, recipientId: e.target.value })}
+                    className="w-full bg-slate-50 text-slate-800 text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium mb-2"
+                  >
+                    {candidates.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.full_name} ({c.headline || 'Software Engineer'})
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
                 <input
                   type="text"
                   required
+                  placeholder="Or enter candidate ID / UUID directly..."
                   value={issueForm.recipientId}
                   onChange={(e) => setIssueForm({ ...issueForm, recipientId: e.target.value })}
                   className="w-full bg-slate-50 text-slate-800 text-xs px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"

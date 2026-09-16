@@ -132,7 +132,7 @@ export default function AdminProblemsPage() {
       </div>
 
       {statusMessage && (
-        <div className="p-3 rounded-2xl bg-emerald-950/60 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+        <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           {statusMessage}
         </div>

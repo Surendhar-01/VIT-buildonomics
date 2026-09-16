@@ -51,8 +51,8 @@ export class AssessmentsController {
   @UseGuards(SupabaseAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get personalized assessment recommendations based on resume skills' })
-  async getRecommendedAssessments(@CurrentUser('id') userId: string) {
-    return this.assessmentsService.getPersonalizedRecommendations(userId);
+  async getRecommendedAssessments(@CurrentUser() user: any) {
+    return this.assessmentsService.getPersonalizedRecommendations(user.id, user.role);
   }
 
   @Get(':id')

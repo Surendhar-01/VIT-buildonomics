@@ -42,8 +42,7 @@ export class AdminService {
   }
 
   async listUsers() {
-    // Return mock & registered users
-    return [
+    const defaultUsers = [
       {
         id: 'demo-student-uuid',
         name: 'Alex Vance',
@@ -77,6 +76,27 @@ export class AdminService {
         joinedAt: '2025-09-15T18:20:00Z',
       },
     ];
+
+    if (this.db.isUsingSupabase && this.db.client) {
+      try {
+        const { data: profs } = await this.db.client.from('profiles').select('*');
+        if (profs && profs.length > 0) {
+          const registered = profs.map((p) => ({
+            id: p.id,
+            name: p.full_name || 'Candidate',
+            email: `${p.full_name?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'candidate'}@skillproof.io`,
+            role: 'student',
+            status: 'active',
+            joinedAt: p.created_at || new Date().toISOString(),
+          }));
+          return [...registered, ...defaultUsers.filter((du) => !registered.some((r) => r.id === du.id))];
+        }
+      } catch (err) {
+        // Fall back to default
+      }
+    }
+
+    return defaultUsers;
   }
 
   async updateUserStatus(userId: string, status: 'active' | 'suspended') {

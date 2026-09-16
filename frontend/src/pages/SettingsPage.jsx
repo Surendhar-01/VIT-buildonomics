@@ -29,7 +29,7 @@ export default function SettingsPage() {
       </div>
 
       {saved && (
-        <div className="p-3 rounded-2xl bg-indigo-950/60 border border-indigo-200 text-indigo-700 text-xs flex items-center gap-2">
+        <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           Settings saved successfully!
         </div>

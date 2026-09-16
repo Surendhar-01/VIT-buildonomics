@@ -86,6 +86,41 @@ export default function RecruiterDashboard() {
     }
   };
 
+  // Live instantaneous client-side filter as the user types
+  const filteredCandidates = candidates.filter((c) => {
+    const q = searchQuery.trim().toLowerCase();
+    const matchesQuery =
+      !q ||
+      (c.full_name && c.full_name.toLowerCase().includes(q)) ||
+      (c.headline && c.headline.toLowerCase().includes(q)) ||
+      (c.bio && c.bio.toLowerCase().includes(q)) ||
+      (c.skills && c.skills.some((s) => s.toLowerCase().includes(q)));
+
+    const skillNorm = selectedSkill.trim().toLowerCase().replace('.js', '');
+    const matchesSkill =
+      !selectedSkill ||
+      (c.skills &&
+        c.skills.some((s) => {
+          const sNorm = s.toLowerCase().replace('.js', '');
+          return sNorm === skillNorm || sNorm.includes(skillNorm) || skillNorm.includes(sNorm);
+        }));
+
+    return matchesQuery && matchesSkill;
+  });
+
+  // Extract all available unique skills from candidate pool + standard core competencies
+  const availableSkills = Array.from(
+    new Set([
+      'React',
+      'TypeScript',
+      'JavaScript',
+      'Node.js',
+      'Python',
+      'PostgreSQL',
+      ...candidates.flatMap((c) => c.skills || []),
+    ]),
+  ).sort();
+
   return (
     <div className="w-full space-y-8 animate-in fade-in pb-12">
       {/* Header */}
@@ -108,122 +143,186 @@ export default function RecruiterDashboard() {
       </div>
 
       {actionMessage && (
-        <div className="p-3 rounded-2xl bg-emerald-950/60 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+        <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           {actionMessage}
         </div>
       )}
 
       {/* Filter Bar */}
-      <form onSubmit={handleSearch} className="p-4 rounded-3xl bg-white border border-slate-200 flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+      <form onSubmit={handleSearch} className="p-4 rounded-3xl bg-white border border-slate-200 flex flex-col sm:flex-row gap-3 items-center">
+        <div className="relative flex-1 w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search candidate by name, skills (e.g. React, TypeScript), or title..."
-            className="w-full bg-slate-50 text-slate-800 text-xs pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            className="w-full bg-slate-50 text-slate-800 text-xs pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
           />
         </div>
 
         <select
           value={selectedSkill}
           onChange={(e) => setSelectedSkill(e.target.value)}
-          className="bg-slate-50 text-slate-800 text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          className="w-full sm:w-auto bg-slate-50 text-slate-800 text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         >
           <option value="">All Technical Skills</option>
-          <option value="React.js">React.js</option>
-          <option value="TypeScript">TypeScript</option>
-          <option value="Node.js">Node.js</option>
-          <option value="Python">Python</option>
-          <option value="PostgreSQL">PostgreSQL</option>
+          {availableSkills.map((sk) => (
+            <option key={sk} value={sk}>
+              {sk}
+            </option>
+          ))}
         </select>
 
-        <Button type="submit" variant="success" size="sm">
-          Filter Candidates
-        </Button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button type="submit" variant="success" size="sm" className="flex-1 sm:flex-initial">
+            Filter Candidates
+          </Button>
+
+          {(searchQuery || selectedSkill) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedSkill('');
+                loadData();
+              }}
+              className="text-slate-500 hover:text-slate-800"
+            >
+              Clear
+            </Button>
+          )}
+        </div>
       </form>
 
       {/* Candidate Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {candidates.map((c) => (
-          <div
-            key={c.id}
-            className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-slate-300 transition-all shadow-xl flex flex-col justify-between space-y-4"
-          >
-            <div className="space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">
-                    {c.full_name?.charAt(0) || 'C'}
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900">{c.full_name}</h3>
-                    <p className="text-xs text-indigo-700 font-medium">{c.headline}</p>
-                  </div>
-                </div>
-                <Badge variant="success" className="text-[10px]">Verified</Badge>
-              </div>
-
-              <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                {c.bio || 'Candidate focused on building scalable, verifiable full-stack applications.'}
-              </p>
-
-              {/* Skills and Evidence preview */}
-              <div className="space-y-1.5 pt-2">
-                <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
-                  Verified Skills:
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {(c.skills || ['React.js', 'TypeScript', 'Node.js']).slice(0, 5).map((s, i) => (
-                    <Badge key={i} variant="default" className="text-[10px]">
-                      {s}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              {/* Credentials preview */}
-              {c.credentials && c.credentials.length > 0 && (
-                <div className="pt-2 flex items-center gap-1.5 text-xs text-indigo-700 font-medium">
-                  <Award className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>{c.credentials[0].title}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Recruiter Action Bar */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
-              <a
-                href={`/p/alex-vance`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-slate-600 hover:text-slate-900 flex items-center gap-1"
-              >
-                View Public Portfolio <ExternalLink className="w-3 h-3" />
-              </a>
-
-              <Button
-                onClick={() => setSelectedCandidate(c)}
-                variant="secondary"
-                size="sm"
-                icon={BookmarkPlus}
-              >
-                Add to Shortlist
-              </Button>
-            </div>
+      {filteredCandidates.length === 0 ? (
+        <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+            <Users className="w-6 h-6" />
           </div>
-        ))}
-      </div>
+          <h3 className="text-base font-bold text-slate-900">No Candidates Found</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            No verified candidates matched "{searchQuery || selectedSkill}". Try searching for another skill like React, Node.js, Python, or clear your filters.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setSearchQuery('');
+              setSelectedSkill('');
+              loadData();
+            }}
+          >
+            Reset Filters
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredCandidates.map((c) => (
+            <div
+              key={c.id}
+              className="p-6 rounded-3xl bg-white border border-slate-200 hover:border-slate-300 transition-all shadow-sm flex flex-col justify-between space-y-4"
+            >
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-xs">
+                      {c.full_name?.charAt(0) || 'C'}
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">{c.full_name}</h3>
+                      <p className="text-xs text-indigo-700 font-medium">{c.headline || 'Verified Software Engineer'}</p>
+                    </div>
+                  </div>
+                  <Badge variant="success" className="text-[10px]">Verified</Badge>
+                </div>
+
+                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                  {c.bio || 'Candidate focused on building scalable, verifiable full-stack applications.'}
+                </p>
+
+                {/* Skills preview */}
+                <div className="space-y-1.5 pt-2">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    VERIFIED SKILLS:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {c.skills && c.skills.length > 0 ? (
+                      c.skills.slice(0, 6).map((s, i) => (
+                        <Badge key={i} variant="default" className="text-[10px]">
+                          {s}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">No skills listed yet</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Credentials preview */}
+                {c.credentials && c.credentials.length > 0 && (
+                  <div className="pt-2 flex items-center gap-1.5 text-xs text-indigo-700 font-medium">
+                    <Award className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{c.credentials[0].title}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Recruiter Action Bar */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                <Link
+                  to={c.slug ? `/p/${c.slug}` : `/p/${c.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-medium text-slate-600 hover:text-indigo-600 flex items-center gap-1 transition-colors"
+                >
+                  View Public Portfolio <ExternalLink className="w-3 h-3" />
+                </Link>
+
+                <Button
+                  onClick={() => setSelectedCandidate(c)}
+                  variant="secondary"
+                  size="sm"
+                  icon={BookmarkPlus}
+                >
+                  Add to Shortlist
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Add to Shortlist Modal */}
       {selectedCandidate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50 backdrop-blur-sm">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-md border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl">
             <h3 className="text-base font-bold text-slate-900">
               Save {selectedCandidate.full_name} to Shortlist
             </h3>
+
+            {shortlists.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Target Shortlist
+                </label>
+                <select
+                  value={selectedShortlistId}
+                  onChange={(e) => setSelectedShortlistId(e.target.value)}
+                  className="w-full bg-slate-50 text-slate-800 text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  {shortlists.map((sl) => (
+                    <option key={sl.id} value={sl.id}>
+                      {sl.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -233,7 +332,7 @@ export default function RecruiterDashboard() {
                 rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add private evaluation notes (e.g. Strong benchmark pass rate, recommend for Senior Frontend role)..."
+                placeholder="Add private evaluation notes (e.g. Strong benchmark pass rate, recommend for Senior Full-Stack role)..."
                 className="w-full bg-slate-50 text-slate-800 text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none"
               />
             </div>

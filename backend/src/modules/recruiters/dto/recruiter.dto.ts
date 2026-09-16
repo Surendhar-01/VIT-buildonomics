@@ -7,10 +7,9 @@ export class CandidateSearchFilterDto {
   @IsOptional()
   query?: string;
 
-  @ApiPropertyOptional({ example: ['React.js', 'Node.js'] })
-  @IsArray()
+  @ApiPropertyOptional({ example: 'React,Node.js' })
   @IsOptional()
-  skills?: string[];
+  skills?: any;
 
   @ApiPropertyOptional()
   @IsString()

@@ -119,10 +119,10 @@ export default function PublicVerificationPage() {
             <div
               className={`p-4 rounded-2xl flex items-center justify-between border ${
                 data.isRevoked
-                  ? 'bg-rose-950/30 border-rose-200 text-rose-700'
+                  ? 'bg-rose-50 border-rose-200 text-rose-800'
                   : data.isSignatureValid
-                  ? 'bg-emerald-950/30 border-emerald-200 text-emerald-700'
-                  : 'bg-amber-950/30 border-amber-200 text-amber-800'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-amber-50 border-amber-200 text-amber-800'
               }`}
             >
               <div className="flex items-center gap-3">
