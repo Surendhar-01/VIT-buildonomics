@@ -80,8 +80,24 @@ export class AssessmentsService {
       }
     }
 
-    if (!assess) {
-      throw new NotFoundException(`Assessment not found`);
+    // Ensure public sample test cases are populated for each problem
+    for (const prob of problems) {
+      if (!prob.sampleTestCases || prob.sampleTestCases.length === 0) {
+        if (this.db.isUsingSupabase && this.db.client) {
+          const { data: tcs } = await this.db.client
+            .from('coding_test_cases')
+            .select('*')
+            .eq('problem_id', prob.id)
+            .eq('is_hidden', false);
+          if (tcs && tcs.length > 0) {
+            prob.sampleTestCases = tcs;
+          }
+        }
+        if (!prob.sampleTestCases || prob.sampleTestCases.length === 0) {
+          const memCases = this.db.inMemory.codingTestCases.get(prob.id) || [];
+          prob.sampleTestCases = memCases.filter((tc: any) => !tc.is_hidden);
+        }
+      }
     }
 
     return {
@@ -313,13 +329,17 @@ export class AssessmentsService {
 
   async getPersonalizedRecommendations(userId: string) {
     const profile = await this.getProfileWithSkills(userId);
-    const hasUploadedResume = Boolean(profile?.resume_url && profile.resume_url.trim().length > 0);
     const rawSkills = profile?.skills || [];
     const skillNames = rawSkills
       .map((s: any) => s?.skill_name || s?.name || (typeof s === 'string' ? s : ''))
       .filter(Boolean);
 
-    // If candidate has NOT uploaded a resume OR has no skills extracted from resume:
+    const hasUploadedResume = Boolean(
+      (profile?.resume_url && profile.resume_url.trim().length > 0) ||
+      skillNames.length > 0
+    );
+
+    // If candidate has NOT uploaded a resume OR has no skills extracted:
     if (!hasUploadedResume || skillNames.length === 0) {
       return {
         hasResume: false,
@@ -365,7 +385,7 @@ export class AssessmentsService {
           if (cat.includes(s) || title.includes(s) || desc.includes(s)) {
             matched.push(s);
           } else if (
-            (s.includes('sql') || s.includes('postgres') || s.includes('mysql') || s.includes('database')) &&
+            (s.includes('sql') || s.includes('postgres') || s.includes('mysql') || s.includes('database') || s.includes('rdbms')) &&
             (cat.includes('sql') || cat.includes('database') || title.includes('sql') || title.includes('database'))
           ) {
             matched.push(s);
@@ -375,7 +395,11 @@ export class AssessmentsService {
               s.includes('angular') ||
               s.includes('frontend') ||
               s.includes('javascript') ||
-              s.includes('typescript')) &&
+              s.includes('typescript') ||
+              s.includes('html') ||
+              s.includes('css') ||
+              s.includes('tailwind') ||
+              s.includes('next')) &&
             (cat.includes('frontend') || title.includes('frontend'))
           ) {
             matched.push(s);
@@ -386,17 +410,24 @@ export class AssessmentsService {
               s.includes('backend') ||
               s.includes('redis') ||
               s.includes('python') ||
-              s.includes('api')) &&
+              s.includes('api') ||
+              s.includes('django') ||
+              s.includes('fastapi') ||
+              s.includes('spring')) &&
             (cat.includes('backend') || title.includes('backend'))
           ) {
             matched.push(s);
           } else if (
             (s.includes('algorithm') ||
               s.includes('data structure') ||
+              s.includes('dsa') ||
               s.includes('java') ||
               s.includes('c++') ||
               s.includes('c#') ||
-              s.includes('python')) &&
+              s.includes('python') ||
+              s.includes('problem solving') ||
+              s.includes('fullstack') ||
+              s.includes('full stack')) &&
             (cat.includes('full stack') || title.includes('algorithmic'))
           ) {
             matched.push(s);
@@ -427,6 +458,16 @@ export class AssessmentsService {
       }
     }
 
+    // Ensure at least 1 assessment is unlocked if resume skills are present
+    if (deduplicatedAssessments.length === 0 && allAssessments.length > 0) {
+      deduplicatedAssessments.push({
+        ...allAssessments[0],
+        isRecommended: true,
+        matchedSkills: skillNames.slice(0, 3),
+        recommendationReason: `Recommended technical benchmark for ${skillNames[0]} profile`,
+      });
+    }
+
     const matchedProblems = allProblems
       .map((p: any) => {
         const cat = (p.category || '').toLowerCase();
@@ -437,21 +478,24 @@ export class AssessmentsService {
         lowerSkills.forEach((s: string) => {
           if (cat.includes(s) || title.includes(s) || desc.includes(s)) {
             matched.push(s);
-          } else if ((s.includes('sql') || s.includes('postgres')) && cat.includes('sql')) {
+          } else if (
+            (s.includes('sql') || s.includes('postgres') || s.includes('mysql')) &&
+            (cat.includes('sql') || cat.includes('database'))
+          ) {
             matched.push(s);
           } else if (
-            (s.includes('react') || s.includes('javascript') || s.includes('frontend')) &&
+            (s.includes('react') || s.includes('javascript') || s.includes('typescript') || s.includes('frontend')) &&
             cat.includes('frontend')
           ) {
             matched.push(s);
           } else if (
-            (s.includes('node') || s.includes('backend') || s.includes('redis')) &&
+            (s.includes('node') || s.includes('backend') || s.includes('redis') || s.includes('python')) &&
             (cat.includes('backend') || cat.includes('system'))
           ) {
             matched.push(s);
           } else if (
-            (s.includes('algorithm') || s.includes('two sum') || s.includes('stack')) &&
-            cat.includes('algorithm')
+            (s.includes('algorithm') || s.includes('two sum') || s.includes('stack') || s.includes('dsa') || s.includes('java')) &&
+            (cat.includes('algorithm') || cat.includes('data-structure'))
           ) {
             matched.push(s);
           }
@@ -468,6 +512,14 @@ export class AssessmentsService {
         return null;
       })
       .filter(Boolean);
+
+    if (matchedProblems.length === 0 && allProblems.length > 0) {
+      matchedProblems.push({
+        ...allProblems[0],
+        isRecommended: true,
+        matchedSkills: skillNames.slice(0, 2),
+      });
+    }
 
     return {
       hasResume: true,

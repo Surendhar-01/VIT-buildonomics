@@ -27,9 +27,8 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [loginDropdownOpen, setLoginDropdownOpen] = useState(false);
 
-  const handleRoleQuickStart = (role, path) => {
-    switchRole(role);
-    navigate(path);
+  const handleRoleQuickStart = (role) => {
+    navigate(`/login?role=${role}`);
   };
 
   const navigateToRoleLogin = (role) => {
@@ -202,14 +201,14 @@ export default function LandingPage() {
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center justify-center gap-4 mb-14">
           <button
-            onClick={() => handleRoleQuickStart('student', '/dashboard')}
+            onClick={() => handleRoleQuickStart('student')}
             className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer"
           >
             Launch Student Portal
             <ArrowRight className="w-4 h-4" />
           </button>
           <button
-            onClick={() => handleRoleQuickStart('recruiter', '/recruiter')}
+            onClick={() => handleRoleQuickStart('recruiter')}
             className="px-6 py-3 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-semibold text-sm shadow-xs transition-all flex items-center gap-2 cursor-pointer"
           >
             <Users className="w-4 h-4 text-emerald-600" />
@@ -296,7 +295,7 @@ export default function LandingPage() {
                 </p>
               </div>
               <button
-                onClick={() => handleRoleQuickStart('student', '/dashboard')}
+                onClick={() => handleRoleQuickStart('student')}
                 className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
               >
                 Open Student View →
@@ -312,7 +311,7 @@ export default function LandingPage() {
                 </p>
               </div>
               <button
-                onClick={() => handleRoleQuickStart('recruiter', '/recruiter')}
+                onClick={() => handleRoleQuickStart('recruiter')}
                 className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
               >
                 Open Recruiter View →
@@ -328,7 +327,7 @@ export default function LandingPage() {
                 </p>
               </div>
               <button
-                onClick={() => handleRoleQuickStart('issuer', '/issuer')}
+                onClick={() => handleRoleQuickStart('issuer')}
                 className="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
               >
                 Open Issuer View →
@@ -344,7 +343,7 @@ export default function LandingPage() {
                 </p>
               </div>
               <button
-                onClick={() => handleRoleQuickStart('admin', '/admin')}
+                onClick={() => handleRoleQuickStart('admin')}
                 className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
               >
                 Open Admin View →

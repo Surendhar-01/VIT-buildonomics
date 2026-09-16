@@ -87,7 +87,10 @@ export class ProfilesService {
     if (getVal('certifications', 'certifications') !== undefined) dbPayload.certifications = getVal('certifications', 'certifications');
     if (getVal('githubUrl', 'github_url') !== undefined) dbPayload.github_url = getVal('githubUrl', 'github_url');
     if (getVal('linkedinUrl', 'linkedin_url') !== undefined) dbPayload.linkedin_url = getVal('linkedinUrl', 'linkedin_url');
-    if (getVal('resumeUrl', 'resume_url') !== undefined) dbPayload.resume_url = getVal('resumeUrl', 'resume_url');
+    const resumeVal = getVal('resumeUrl', 'resume_url');
+    if (resumeVal !== undefined && resumeVal !== null && typeof resumeVal === 'string' && resumeVal.trim().length > 0) {
+      dbPayload.resume_url = resumeVal.trim();
+    }
     if (getVal('visibility', 'visibility') !== undefined) dbPayload.visibility = getVal('visibility', 'visibility');
 
     if (this.db.isUsingSupabase && this.db.client) {

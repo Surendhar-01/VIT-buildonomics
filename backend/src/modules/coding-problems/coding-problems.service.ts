@@ -241,7 +241,9 @@ export class CodingProblemsService {
         query = query.eq('is_hidden', false);
       }
       const { data } = await query;
-      return data || [];
+      if (data && data.length > 0) {
+        return data;
+      }
     }
 
     const list = this.db.inMemory.codingTestCases.get(problemId) || [];
