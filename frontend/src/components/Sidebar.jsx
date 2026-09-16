@@ -1,7 +1,8 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
+  ShieldCheck,
   LayoutDashboard,
   User,
   FolderGit2,
@@ -60,8 +61,28 @@ export default function Sidebar() {
   else if (role === 'admin') navLinks = adminLinks;
 
   return (
-    <aside className="fixed top-16 bottom-0 left-0 w-64 hidden md:block bg-white border-r border-slate-200 p-4 overflow-y-auto z-30">
-      <div className="space-y-6">
+    <aside className="fixed top-0 bottom-0 left-0 w-64 hidden md:flex flex-col bg-white border-r border-slate-200 z-40">
+      {/* Sidebar Brand Header with Fixed Title */}
+      <div className="h-16 flex items-center px-5 border-b border-slate-200 shrink-0 bg-white">
+        <Link to="/" className="flex items-center gap-2.5 group">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-500 p-0.5 shadow-md shadow-indigo-500/20">
+            <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5 text-indigo-600 group-hover:scale-110 transition-transform" />
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-base font-bold text-slate-900 tracking-tight">
+              AI SkillProof
+            </span>
+            <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded uppercase tracking-wider">
+              Ed25519
+            </span>
+          </div>
+        </Link>
+      </div>
+
+      {/* Scrollable Navigation Body */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <div>
           <div className="px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
             {role} Workspace

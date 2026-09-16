@@ -29,14 +29,15 @@ import SkillGapPage from './pages/SkillGapPage';
 import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
-// Layout with Navbar and Sidebar
+// Layout with Fixed Sidebar (including Title) and Sticky Navbar
 function AppLayout() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
-      <Navbar />
-      <div className="flex-1 flex w-full">
-        <Sidebar />
-        <main className="flex-1 md:ml-64 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">
+      {/* Complete Fixed Sidebar with Title */}
+      <Sidebar />
+      <div className="flex-1 flex flex-col md:pl-64 min-w-0">
+        <Navbar />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
           <Outlet />
         </main>
       </div>

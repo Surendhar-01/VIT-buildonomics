@@ -44,26 +44,26 @@ export default function Navbar() {
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Brand Logo */}
+          {/* Brand Logo - visible on mobile, hidden on desktop (fixed sidebar has title) */}
           <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-500 p-0.5 shadow-md shadow-indigo-500/20">
+            <Link to="/" className="md:hidden flex items-center gap-2.5 group">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-500 p-0.5 shadow-md shadow-indigo-500/20">
                 <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
                   <ShieldCheck className="w-5 h-5 text-indigo-600 group-hover:scale-110 transition-transform" />
                 </div>
               </div>
-              <div>
-                <span className="text-lg font-bold text-slate-900 tracking-tight">
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-bold text-slate-900 tracking-tight">
                   AI SkillProof
                 </span>
-                <span className="hidden sm:inline-block ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded uppercase tracking-wider">
+                <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded uppercase tracking-wider">
                   Ed25519
                 </span>
               </div>
             </Link>
 
-            {/* Public Quick Links */}
-            <nav className="hidden md:flex items-center gap-1 ml-8">
+            {/* Public Quick Links on Desktop */}
+            <nav className="hidden md:flex items-center gap-1">
               <Link
                 to="/assessments"
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
