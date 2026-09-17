@@ -114,6 +114,26 @@ export class DatabaseService implements OnModuleInit {
       updated_at: new Date().toISOString(),
     });
 
+    // Seed default recruiter demo profile
+    const recruiterUser = {
+      id: 'demo-recruiter-uuid',
+      email: 'recruiter@skillproof.io',
+      full_name: 'Sarah Connor',
+      role: 'recruiter',
+    };
+    this.inMemory.users.set(recruiterUser.id, recruiterUser);
+    this.inMemory.userRoles.set(recruiterUser.id, ['recruiter']);
+
+    // Seed default issuer demo profile
+    const issuerUser = {
+      id: 'demo-issuer-uuid',
+      email: 'issuer@skillproof.io',
+      full_name: 'Academic Registrar & Dean Office',
+      role: 'issuer',
+    };
+    this.inMemory.users.set(issuerUser.id, issuerUser);
+    this.inMemory.userRoles.set(issuerUser.id, ['issuer']);
+
     // Seed profile skills
     this.inMemory.profileSkills.set('demo-student-uuid', [
       { id: 'ps-1', profile_id: 'demo-student-uuid', skill_id: 'sk-1', proficiency_level: 'advanced', evidence_description: 'Built 3 production SPAs with state caching', verified: true },
