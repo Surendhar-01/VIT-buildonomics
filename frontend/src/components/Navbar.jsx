@@ -40,6 +40,11 @@ export default function Navbar() {
     else if (newRole === 'admin') navigate('/admin');
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="w-full px-4 sm:px-6 lg:px-8">
@@ -88,7 +93,7 @@ export default function Navbar() {
           </div>
 
           {/* Right Action Bar */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Quick Role Switcher */}
             <div className="relative">
               <button
@@ -138,6 +143,7 @@ export default function Navbar() {
               <Link
                 to={role === 'student' ? '/profile' : `/${role}`}
                 className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                title="View Account Profile"
               >
                 <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center text-xs font-bold text-white uppercase shadow-xs">
                   {user?.fullName?.charAt(0) || 'U'}
@@ -147,12 +153,22 @@ export default function Navbar() {
                   <div className="text-[10px] text-slate-500 capitalize">{role}</div>
                 </div>
               </Link>
+
+              {/* Universal Logout Button in Navbar */}
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 rounded-xl transition-all shadow-2xs hover:shadow-xs cursor-pointer group ml-1"
+                title="Log out of AI SkillProof"
+              >
+                <LogOut className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
             </div>
 
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              className="md:hidden p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -198,6 +214,20 @@ export default function Navbar() {
           >
             Public Credential Verifier
           </Link>
+
+          {/* Mobile Drawer Logout Item */}
+          <div className="pt-2 mt-2 border-t border-slate-200">
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleLogout();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout ({user?.fullName || role})</span>
+            </button>
+          </div>
         </div>
       )}
     </header>
