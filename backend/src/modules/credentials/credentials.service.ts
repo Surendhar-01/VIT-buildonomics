@@ -10,7 +10,22 @@ import { v4 as uuidv4 } from 'uuid';
 import * as QRCode from 'qrcode';
 import { DatabaseService } from '../../database/database.service';
 import { CryptoSignerService } from './crypto-signer.service';
+import * as os from 'os';
 import { CreateCredentialDto, RevokeCredentialDto } from './dto/create-credential.dto';
+
+export function getLocalIpAddress(): string {
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name] || []) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          return iface.address;
+        }
+      }
+    }
+  } catch {}
+  return '127.0.0.1';
+}
 
 @Injectable()
 export class CredentialsService implements OnModuleInit {
@@ -21,8 +36,13 @@ export class CredentialsService implements OnModuleInit {
     private readonly signer: CryptoSignerService,
     private readonly configService: ConfigService,
   ) {
-    this.frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const envFrontend = this.configService.get<string>('FRONTEND_URL');
+    const localIp = getLocalIpAddress();
+    if (envFrontend && !envFrontend.includes('localhost') && !envFrontend.includes('127.0.0.1')) {
+      this.frontendUrl = envFrontend;
+    } else {
+      this.frontendUrl = `http://${localIp}:5173`;
+    }
   }
 
   async onModuleInit() {
@@ -318,8 +338,14 @@ export class CredentialsService implements OnModuleInit {
       }
     }
 
-    // Guarantee that every credential has qr_code generated
+    // Guarantee that every credential has network verification_url and qr_code generated
+    const localIp = getLocalIpAddress();
     for (const cred of combined) {
+      if (cred.verification_url) {
+        cred.verification_url = cred.verification_url.replace(/localhost|127\.0\.0\.1/g, localIp);
+      } else {
+        cred.verification_url = `http://${localIp}:5173/verify/${cred.credential_id}`;
+      }
       if (!cred.qr_code && cred.verification_url) {
         try {
           cred.qr_code = await QRCode.toDataURL(cred.verification_url, {
@@ -379,10 +405,16 @@ export class CredentialsService implements OnModuleInit {
       throw new NotFoundException(`Credential '${credentialId}' not found`);
     }
 
-    // Attach QR code if not saved
-    if (!cred.qr_code) {
-      const vUrl = cred.verification_url || `${this.frontendUrl}/verify/${cred.credential_id}`;
-      cred.qr_code = await QRCode.toDataURL(vUrl, {
+    const localIp = getLocalIpAddress();
+    if (cred.verification_url) {
+      cred.verification_url = cred.verification_url.replace(/localhost|127\.0\.0\.1/g, localIp);
+    } else {
+      cred.verification_url = `http://${localIp}:5173/verify/${cred.credential_id}`;
+    }
+
+    // Attach QR code if not saved or update to network URL
+    if (!cred.qr_code || cred.qr_code.length < 100) {
+      cred.qr_code = await QRCode.toDataURL(cred.verification_url, {
         errorCorrectionLevel: 'H',
         margin: 2,
         width: 280,

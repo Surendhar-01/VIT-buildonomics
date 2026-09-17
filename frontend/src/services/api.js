@@ -1,8 +1,20 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname;
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return `http://${host}:4000/api`;
+    }
+  }
+  return import.meta.env.VITE_API_URL || 'http://172.18.229.52:4000/api';
+};
 
 class ApiService {
   constructor() {
-    this.baseUrl = API_URL;
+    this.baseUrl = getApiBaseUrl();
+  }
+
+  getBaseUrl() {
+    return getApiBaseUrl();
   }
 
   getAuthToken() {
@@ -30,7 +42,8 @@ class ApiService {
       ...options.headers,
     };
 
-    const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    const baseUrl = this.getBaseUrl();
+    const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
 
     try {
       const response = await fetch(url, {

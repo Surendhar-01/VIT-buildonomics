@@ -72,9 +72,26 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT || 4000;
-  await app.listen(port);
-  logger.log(`AI SkillProof Platform API running at http://localhost:${port}/api`);
-  logger.log(`Swagger OpenAPI Documentation: http://localhost:${port}/api/docs`);
+  await app.listen(port, '0.0.0.0');
+
+  // Detect local network IPv4 address
+  let localIp = '127.0.0.1';
+  try {
+    const os = await import('os');
+    const ifaces = os.networkInterfaces();
+    for (const name of Object.keys(ifaces)) {
+      for (const iface of ifaces[name] || []) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          localIp = iface.address;
+          break;
+        }
+      }
+    }
+  } catch {}
+
+  logger.log(`Local Access:   http://localhost:${port}/api`);
+  logger.log(`Network Access: http://${localIp}:${port}/api`);
+  logger.log(`Swagger OpenAPI Documentation: http://${localIp}:${port}/api/docs`);
 }
 
 bootstrap();

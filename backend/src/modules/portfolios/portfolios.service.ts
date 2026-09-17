@@ -292,7 +292,7 @@ export class PortfoliosService {
           status: 'active',
           issued_at: port.profiles?.created_at || new Date().toISOString(),
           signature: 'ed25519:6b4a2f8c...9e3d1b',
-          verification_url: `http://localhost:5173/verify/SKP-2026-FSD01`,
+          verification_url: `http://172.18.229.52:5173/verify/SKP-2026-FSD01`,
         },
       ];
     }

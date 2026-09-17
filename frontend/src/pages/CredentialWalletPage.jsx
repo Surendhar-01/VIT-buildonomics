@@ -93,7 +93,11 @@ export default function CredentialWalletPage() {
   }, []);
 
   const handleCopy = (id) => {
-    const url = `${window.location.origin}/verify/${id}`;
+    const origin =
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://172.18.229.52:5173'
+        : window.location.origin;
+    const url = `${origin}/verify/${id}`;
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);

@@ -191,7 +191,11 @@ export default function PublicPortfolioPage() {
   }, [slug]);
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+    const url =
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? window.location.href.replace(/http:\/\/(localhost|127\.0\.0\.1):5173/g, 'http://172.18.229.52:5173')
+        : window.location.href;
+    navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
