@@ -24,43 +24,54 @@ import {
 
 export default function Sidebar() {
   const { role, user } = useAuth();
-  const [portfolioSlug, setPortfolioSlug] = useState(() => {
-    if (user?.fullName) {
+  const getStudentSlug = () => {
+    try {
+      const stored = localStorage.getItem('skillproof_user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        if (u.fullName && !u.fullName.toLowerCase().includes('alex vance')) {
+          return u.fullName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        }
+        if (u.id) return u.id;
+      }
+    } catch {}
+    if (user?.fullName && !user.fullName.toLowerCase().includes('alex vance')) {
       return user.fullName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     }
-    return user?.id || 'alex-vance';
-  });
+    return user?.id || '';
+  };
+
+  const [portfolioSlug, setPortfolioSlug] = useState(getStudentSlug);
+
+  useEffect(() => {
+    const s = getStudentSlug();
+    if (s) setPortfolioSlug(s);
+  }, [user]);
 
   useEffect(() => {
     let isMounted = true;
     if (role === 'student') {
-      Promise.all([
-        api.getMyPortfolios().catch(() => []),
-        api.getMyProfile().catch(() => null),
-      ])
-        .then(([portfolios, profile]) => {
-          if (!isMounted) return;
-          if (portfolios && portfolios.length > 0 && portfolios[0]?.slug) {
-            setPortfolioSlug(portfolios[0].slug);
-          } else if (profile) {
-            const s =
-              profile.slug ||
-              (profile.full_name
-                ? profile.full_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-                : '') ||
-              profile.user_id ||
-              profile.id;
-            if (s) setPortfolioSlug(s);
-          }
+      api.getMyProfile()
+        .then((profile) => {
+          if (!isMounted || !profile) return;
+          const s =
+            (profile.slug && profile.slug !== 'alex-vance' ? profile.slug : '') ||
+            (profile.full_name && !profile.full_name.toLowerCase().includes('alex vance')
+              ? profile.full_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+              : '') ||
+            profile.user_id ||
+            profile.id;
+          if (s) setPortfolioSlug(s);
         })
         .catch(() => {});
     }
     return () => {
       isMounted = false;
     };
-  }, [role, user?.id, user?.fullName]);
+  }, [role, user]);
 
-  const livePortfolioUrl = role === 'student' ? `/p/${portfolioSlug}` : '/p/alex-vance';
+  const activeSlug = portfolioSlug || getStudentSlug() || 'surendhar-s';
+  const livePortfolioUrl = role === 'student' ? `/p/${activeSlug}` : '/p/alex-vance';
 
   const studentLinks = [
     { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },

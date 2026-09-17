@@ -150,7 +150,8 @@ export default function StudentDashboard() {
   const nameSlug = (profile?.full_name || user?.fullName)
     ? (profile?.full_name || user?.fullName).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
     : '';
-  const publicSlug = profile?.slug || nameSlug || profile?.user_id || profile?.id || 'alex-vance';
+  const validSlug = profile?.slug && profile.slug !== 'alex-vance' ? profile.slug : '';
+  const publicSlug = validSlug || nameSlug || profile?.user_id || profile?.id || 'surendhar-s';
 
   return (
     <div className="space-y-8 animate-in fade-in pb-12">
