@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
 import {
   ShieldCheck,
   LayoutDashboard,
@@ -22,7 +23,44 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
+  const [portfolioSlug, setPortfolioSlug] = useState(() => {
+    if (user?.fullName) {
+      return user.fullName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+    return user?.id || 'alex-vance';
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    if (role === 'student') {
+      Promise.all([
+        api.getMyPortfolios().catch(() => []),
+        api.getMyProfile().catch(() => null),
+      ])
+        .then(([portfolios, profile]) => {
+          if (!isMounted) return;
+          if (portfolios && portfolios.length > 0 && portfolios[0]?.slug) {
+            setPortfolioSlug(portfolios[0].slug);
+          } else if (profile) {
+            const s =
+              profile.slug ||
+              (profile.full_name
+                ? profile.full_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                : '') ||
+              profile.user_id ||
+              profile.id;
+            if (s) setPortfolioSlug(s);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [role, user?.id, user?.fullName]);
+
+  const livePortfolioUrl = role === 'student' ? `/p/${portfolioSlug}` : '/p/alex-vance';
 
   const studentLinks = [
     { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -131,7 +169,7 @@ export default function Sidebar() {
               <span>Public QR Verifier</span>
             </NavLink>
             <a
-              href="/p/alex-vance"
+              href={livePortfolioUrl}
               target="_blank"
               rel="noreferrer"
               className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all"

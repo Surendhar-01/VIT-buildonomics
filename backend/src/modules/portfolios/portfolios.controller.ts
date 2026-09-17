@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -41,8 +42,11 @@ export class PortfoliosController {
   @Get('public/:slug')
   @Public()
   @ApiOperation({ summary: 'Get public portfolio page by custom slug' })
-  async getPublicPortfolioBySlug(@Param('slug') slug: string) {
-    return this.portfoliosService.getPublicPortfolioBySlug(slug);
+  async getPublicPortfolioBySlug(
+    @Param('slug') slug: string,
+    @Headers('x-dev-user-id') devUserId?: string,
+  ) {
+    return this.portfoliosService.getPublicPortfolioBySlug(slug, devUserId);
   }
 
   @Get(':id')

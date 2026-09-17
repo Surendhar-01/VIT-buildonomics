@@ -147,7 +147,10 @@ export default function StudentDashboard() {
   const verifiedSkillsCount = profile?.skills?.length || 0;
   const activeCredentialsCount = credentials?.length || 0;
   const candidateName = profile?.full_name || user?.fullName || 'Candidate';
-  const publicSlug = profile?.slug || profile?.user_id || profile?.id || 'me';
+  const nameSlug = (profile?.full_name || user?.fullName)
+    ? (profile?.full_name || user?.fullName).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    : '';
+  const publicSlug = profile?.slug || nameSlug || profile?.user_id || profile?.id || 'alex-vance';
 
   return (
     <div className="space-y-8 animate-in fade-in pb-12">

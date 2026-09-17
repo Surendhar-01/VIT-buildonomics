@@ -59,22 +59,31 @@ export class PortfoliosService {
     return port;
   }
 
-  async getPublicPortfolioBySlug(slug: string) {
+  async getPublicPortfolioBySlug(slug: string, devUserId?: string) {
     let port: any = null;
+    const cleanSlug = (slug || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+
+    // 1. Check published portfolios in Supabase
     if (this.db.isUsingSupabase && this.db.client) {
-      const { data } = await this.db.client
-        .from('portfolios')
-        .select('*, profiles(*), portfolio_sections(*)')
-        .eq('slug', slug)
-        .eq('is_published', true)
-        .single();
-      port = data;
+      try {
+        const { data } = await this.db.client
+          .from('portfolios')
+          .select('*, profiles(*), portfolio_sections(*)')
+          .or(`slug.eq.${slug},slug.eq.${cleanSlug}`)
+          .eq('is_published', true)
+          .maybeSingle();
+        port = data;
+      } catch (err) {
+        console.warn('[PortfoliosService] Supabase portfolio query error:', err);
+      }
     }
 
-    // Check in-memory seeded portfolios
+    // 2. Check in-memory seeded portfolios
     if (!port) {
       for (const p of this.db.inMemory.portfolios.values()) {
-        if (p.slug === slug && p.is_published) {
+        const pClean = (p.slug || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        if ((p.slug === slug || pClean === cleanSlug) && p.is_published) {
           port = { ...p };
           port.portfolio_sections = this.db.inMemory.portfolioSections.get(p.id) || [];
           port.profiles = this.db.inMemory.profiles.get(p.profile_id);
@@ -83,38 +92,83 @@ export class PortfoliosService {
       }
     }
 
-    // Dynamic candidate profile fallback if no explicit portfolio entry was created yet
+    // 3. Dynamic candidate profile fallback if no explicit portfolio entry was created yet
     if (!port) {
       let prof: any = null;
+
       if (this.db.isUsingSupabase && this.db.client) {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
-        if (isUuid) {
-          const { data } = await this.db.client
-            .from('profiles')
-            .select('*, profile_skills(*, skills(*))')
-            .or(`id.eq.${slug},user_id.eq.${slug}`)
-            .single();
-          prof = data;
-        } else {
-          const { data: allP } = await this.db.client
-            .from('profiles')
-            .select('*, profile_skills(*, skills(*))');
-          prof = (allP || []).find((p: any) => {
-            const pSlug = p.full_name ? p.full_name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '';
-            return pSlug === slug || p.id === slug || p.user_id === slug;
-          });
+        try {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+          if (isUuid) {
+            const { data } = await this.db.client
+              .from('profiles')
+              .select('*, profile_skills(*, skills(*))')
+              .or(`id.eq.${slug},user_id.eq.${slug}`)
+              .maybeSingle();
+            prof = data;
+          } else {
+            const { data: allP } = await this.db.client
+              .from('profiles')
+              .select('*, profile_skills(*, skills(*))');
+            prof = (allP || []).find((p: any) => {
+              const pSlug = (p.full_name || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+              const pNorm = normalize(p.full_name);
+              return (
+                pSlug === cleanSlug ||
+                pNorm === normalize(slug) ||
+                p.id === slug ||
+                p.user_id === slug ||
+                (devUserId && (p.id === devUserId || p.user_id === devUserId))
+              );
+            });
+          }
+        } catch (err) {
+          console.warn('[PortfoliosService] Supabase profile query error:', err);
         }
       }
 
       if (!prof) {
         prof =
           this.db.inMemory.profiles.get(slug) ||
-          Array.from(this.db.inMemory.profiles.values()).find(
-            (p) =>
-              (p.full_name ? p.full_name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '') === slug ||
+          Array.from(this.db.inMemory.profiles.values()).find((p) => {
+            const pSlug = (p.full_name || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            const pNorm = normalize(p.full_name);
+            return (
+              pSlug === cleanSlug ||
+              pNorm === normalize(slug) ||
               p.id === slug ||
-              p.user_id === slug,
-          );
+              p.user_id === slug ||
+              (devUserId && (p.id === devUserId || p.user_id === devUserId))
+            );
+          });
+      }
+
+      // Check registered users in memory or devUserId
+      if (!prof) {
+        const u = Array.from(this.db.inMemory.users.values()).find(
+          (cand) =>
+            (cand.fullName &&
+              (cand.fullName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') === cleanSlug ||
+                normalize(cand.fullName) === normalize(slug))) ||
+            cand.id === slug ||
+            (devUserId && cand.id === devUserId),
+        );
+        if (u) {
+          prof = {
+            id: u.id,
+            user_id: u.id,
+            full_name: u.fullName || u.full_name || 'Candidate',
+            headline: 'Full-Stack Software Engineer',
+            bio: 'Verified candidate with demonstrated problem-solving skills and project evidence.',
+            location: 'Vellore, Tamil Nadu, India',
+            education: 'B.Tech in Computer Science',
+            institution: 'Vellore Institute of Technology',
+            graduation_year: 2026,
+            visibility: 'public',
+            created_at: new Date().toISOString(),
+          };
+          this.db.inMemory.profiles.set(u.id, prof);
+        }
       }
 
       if (prof) {
@@ -122,9 +176,9 @@ export class PortfoliosService {
           id: prof.id,
           profile_id: prof.id,
           title: `${prof.full_name} — Verified Engineer Portfolio`,
-          slug: slug,
+          slug: cleanSlug || slug,
           template: 'modern-minimal',
-          theme: 'light',
+          theme: 'dark-indigo',
           is_published: true,
           profiles: prof,
           portfolio_sections: [],
@@ -144,38 +198,52 @@ export class PortfoliosService {
     let credentials: any[] = [];
 
     if (this.db.isUsingSupabase && this.db.client) {
-      const { data: projData } = await this.db.client
-        .from('projects')
-        .select('*')
-        .or(`profile_id.eq.${profileId},profile_id.eq.${userId}`)
-        .eq('visibility', 'public');
-      projects = projData || [];
+      try {
+        const { data: projData } = await this.db.client
+          .from('projects')
+          .select('*')
+          .or(`profile_id.eq.${profileId},profile_id.eq.${userId}`)
+          .eq('visibility', 'public');
+        projects = projData || [];
 
-      const { data: credData } = await this.db.client
-        .from('credentials')
-        .select('*')
-        .or(`recipient_id.eq.${profileId},recipient_id.eq.${userId}`)
-        .eq('status', 'active');
-      credentials = credData || [];
+        const { data: credData } = await this.db.client
+          .from('credentials')
+          .select('*')
+          .or(`recipient_id.eq.${profileId},recipient_id.eq.${userId}`)
+          .eq('status', 'active');
+        credentials = credData || [];
 
-      const { data: psData } = await this.db.client
-        .from('profile_skills')
-        .select('*, skills(*)')
-        .eq('profile_id', profileId);
-      skills = (psData || []).map((ps: any) => ({
-        skill_name: ps.skills?.name || ps.skill_name || 'Skill',
-        proficiency_level: ps.proficiency_level || 'intermediate',
-        evidence_description: ps.evidence_description || 'Verified via SkillProof benchmark',
-        verified: ps.verified ?? true,
-      }));
-    } else {
+        const { data: psData } = await this.db.client
+          .from('profile_skills')
+          .select('*, skills(*)')
+          .eq('profile_id', profileId);
+        skills = (psData || []).map((ps: any) => ({
+          skill_name: ps.skills?.name || ps.skill_name || 'Skill',
+          proficiency_level: ps.proficiency_level || 'intermediate',
+          evidence_description: ps.evidence_description || 'Verified via SkillProof benchmark',
+          verified: ps.verified ?? true,
+        }));
+      } catch (err) {
+        console.warn('[PortfoliosService] Supabase relations query error:', err);
+      }
+    }
+
+    // Complement / fallback from in-memory datastore
+    if (projects.length === 0) {
       projects = Array.from(this.db.inMemory.projects.values()).filter(
         (p) => (p.profile_id === profileId || p.profile_id === userId) && p.visibility === 'public',
       );
+    }
+    if (credentials.length === 0) {
       credentials = Array.from(this.db.inMemory.credentials.values()).filter(
         (c) => (c.recipient_id === profileId || c.recipient_id === userId) && c.status === 'active',
       );
-      const rawSkills = this.db.inMemory.profileSkills.get(profileId) || this.db.inMemory.profileSkills.get(userId) || [];
+    }
+    if (skills.length === 0) {
+      const rawSkills =
+        this.db.inMemory.profileSkills.get(profileId) ||
+        this.db.inMemory.profileSkills.get(userId) ||
+        [];
       skills = rawSkills.map((rs) => ({
         skill_name: rs.skill_name || this.db.inMemory.skills.get(rs.skill_id)?.name || 'Skill',
         proficiency_level: rs.proficiency_level || 'intermediate',
@@ -186,7 +254,7 @@ export class PortfoliosService {
 
     // If candidate still has no skills listed, fallback intelligently
     if (skills.length === 0) {
-      const defaultSkillNames = ['JavaScript', 'React', 'Node.js', 'PostgreSQL'];
+      const defaultSkillNames = ['TypeScript', 'React.js', 'Node.js', 'PostgreSQL'];
       skills = defaultSkillNames.map((name) => ({
         skill_name: name,
         proficiency_level: 'advanced',
