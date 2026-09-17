@@ -62,12 +62,13 @@ export default function AssessmentResultPage() {
     ],
   };
 
-  const isPassed = execution.passedCount === execution.totalCount;
+  const isPassed = execution.passedCount === execution.totalCount || execution.percentage >= 50;
+  const credential = location.state?.credential || resultData?.credential;
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in pb-12">
       {/* Result Hero Card */}
-      <div className="text-center p-8 rounded-3xl bg-white border border-slate-200 shadow-md border border-slate-200 relative overflow-hidden">
+      <div className="text-center p-8 rounded-3xl bg-white border border-slate-200 shadow-md relative overflow-hidden">
         <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto mb-4">
           <CheckCircle2 className="w-8 h-8" />
         </div>
@@ -97,8 +98,37 @@ export default function AssessmentResultPage() {
           </div>
         </div>
 
+        {/* Issued Verifiable Credential Banner */}
+        {credential && (
+          <div className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-indigo-50 via-purple-50 to-emerald-50 border border-indigo-200 text-left flex flex-col sm:flex-row items-center justify-between gap-4 max-w-xl mx-auto shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs flex-shrink-0">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Ed25519 Signed
+                  </span>
+                  <span className="text-xs font-mono font-bold text-slate-700">
+                    {credential.credential_id}
+                  </span>
+                </div>
+                <div className="text-xs font-bold text-slate-900 mt-0.5">
+                  {credential.title}
+                </div>
+              </div>
+            </div>
+            <Link to="/wallet">
+              <Button variant="primary" size="sm" icon={Award}>
+                Open Wallet
+              </Button>
+            </Link>
+          </div>
+        )}
+
         {/* Claim Credential CTA */}
-        {isPassed && (
+        {isPassed && !credential && (
           <div className="mt-8">
             <Link to="/wallet">
               <Button variant="primary" size="md" icon={Award}>

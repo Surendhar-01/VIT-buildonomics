@@ -75,14 +75,43 @@ export default function CredentialWalletPage() {
     setLoading(true);
     try {
       const list = await api.getMyCredentials();
-      if (Array.isArray(list) && list.length > 0) {
-        setCredentials(list);
+      let combined = Array.isArray(list) ? [...list] : [];
+
+      // Merge with locally persisted earned credentials from recent assessment/problem submissions
+      try {
+        const localRaw = localStorage.getItem('skillproof_earned_credentials');
+        if (localRaw) {
+          const localCreds = JSON.parse(localRaw);
+          if (Array.isArray(localCreds) && localCreds.length > 0) {
+            const seen = new Set(combined.map((c) => c.credential_id));
+            for (const lc of localCreds) {
+              if (!seen.has(lc.credential_id)) {
+                combined.unshift(lc);
+                seen.add(lc.credential_id);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading locally earned credentials:', e);
+      }
+
+      if (combined.length > 0) {
+        setCredentials(combined);
       } else {
         setCredentials(DEFAULT_FALLBACK_CREDENTIALS);
       }
     } catch (err) {
       console.warn('Network issue fetching credentials; activating verified local wallet cache:', err);
-      setCredentials(DEFAULT_FALLBACK_CREDENTIALS);
+      try {
+        const localRaw = localStorage.getItem('skillproof_earned_credentials');
+        const localCreds = localRaw ? JSON.parse(localRaw) : [];
+        const seen = new Set(localCreds.map((c) => c.credential_id));
+        const fallback = [...localCreds, ...DEFAULT_FALLBACK_CREDENTIALS.filter((d) => !seen.has(d.credential_id))];
+        setCredentials(fallback);
+      } catch {
+        setCredentials(DEFAULT_FALLBACK_CREDENTIALS);
+      }
     } finally {
       setLoading(false);
     }

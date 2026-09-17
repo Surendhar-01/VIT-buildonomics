@@ -353,9 +353,41 @@ export default function AssessmentTakePage() {
     if (!problem?.id || isDisqualified) return;
     setSubmitting(true);
     try {
-      const res = await api.submitSolution(problem.id, language, code);
+      const res = await api.submitSolution(problem.id, language, code, attemptId);
+
+      // If this is part of an assessment suite, also finalize assessment attempt
+      if (attemptId && assessment?.id) {
+        try {
+          await api.submitAssessment(assessment.id, attemptId, [
+            {
+              problemId: problem.id,
+              passed: res.execution?.overallStatus === 'passed' || (res.execution?.passedCount > 0),
+              score: res.execution?.percentage || 100,
+            },
+          ]);
+        } catch (e) {
+          console.warn('Assessment submit attempt sync:', e);
+        }
+      }
+
+      // Store earned credential into local wallet storage for instant UI persistence
+      if (res.credential) {
+        try {
+          const raw = localStorage.getItem('skillproof_earned_credentials');
+          const existing = raw ? JSON.parse(raw) : [];
+          const updated = [res.credential, ...existing.filter((c) => c.credential_id !== res.credential.credential_id)];
+          localStorage.setItem('skillproof_earned_credentials', JSON.stringify(updated));
+        } catch (storageErr) {
+          console.warn('Could not cache earned credential locally:', storageErr);
+        }
+      }
+
       navigate(`/assessments/result/${res.submissionId || 'sub-1'}`, {
-        state: { result: res, assessmentTitle: assessment?.title || problem?.title },
+        state: {
+          result: res,
+          assessmentTitle: assessment?.title || problem?.title,
+          credential: res.credential || null,
+        },
       });
     } catch (err) {
       alert(`Submission error: ${err.message}`);

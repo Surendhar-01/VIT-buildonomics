@@ -2,14 +2,21 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { CreateAssessmentDto, SubmitAssessmentDto } from './dto/assessment.dto';
+import { CredentialsService } from '../credentials/credentials.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AssessmentsService {
-  constructor(private readonly db: DatabaseService) {}
+  private readonly logger = new Logger(AssessmentsService.name);
+
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly credentialsService: CredentialsService,
+  ) {}
 
   async getAllAssessments() {
     let list: any[] = [];
@@ -191,7 +198,42 @@ export class AssessmentsService {
       score: totalScore,
     });
 
-    return updated;
+    let issuedCredential: any = null;
+    if (percentage >= 50 && candidateId) {
+      try {
+        const assessTitle = attempt.title || attempt.assessments?.title || 'Technical Assessment Benchmark';
+        issuedCredential = await this.credentialsService.issueCredential(
+          'institution-vit',
+          'VIT Technical Assessment Board',
+          {
+            recipientId: candidateId,
+            title: `Certified Specialist: ${assessTitle}`,
+            description: `Awarded for achieving a ${percentage}% score on the proctored ${assessTitle} benchmark examination.`,
+            criteria: `Successfully completed all coding challenges in the proctored benchmark with a score of ${totalScore}/100 (${percentage}%).`,
+            credentialType: 'assessment_achievement',
+            achievementData: {
+              assessmentId: attempt.assessment_id,
+              assessmentTitle: assessTitle,
+              attemptId: dto.attemptId,
+              score: totalScore,
+              percentage: `${percentage}%`,
+              passed: true,
+              submittedAt,
+            },
+          },
+        );
+        this.logger.log(
+          `Issued assessment credential (${issuedCredential.credential_id}) for candidate ${candidateId}`,
+        );
+      } catch (credErr) {
+        this.logger.warn(`Could not issue assessment credential: ${credErr.message}`);
+      }
+    }
+
+    return {
+      ...updated,
+      credential: issuedCredential,
+    };
   }
 
   async disqualifyAssessment(

@@ -312,7 +312,8 @@ export class CredentialsService implements OnModuleInit {
         (isSurendhar &&
           (cred.recipient_id === 'e393dd34-a2c2-4de6-b954-5b1983d0e304' ||
             cred.recipient_id === 'ccce6a37-153a-4e30-bf54-6618faa1ce96')) ||
-        (!isUuid && cred.recipient_id === 'demo-student-uuid')
+        (!isUuid && cred.recipient_id === 'demo-student-uuid') ||
+        (cred.recipient_id && typeof userId === 'string' && (cred.recipient_id.includes(userId) || userId.includes(cred.recipient_id)))
       ) {
         memList.push(cred);
       }
@@ -328,15 +329,20 @@ export class CredentialsService implements OnModuleInit {
       }
     }
 
-    // If still empty, return all primary seeded credentials so candidate wallet is never empty
-    if (combined.length === 0) {
-      for (const cred of this.db.inMemory.credentials.values()) {
-        if (!seen.has(cred.credential_id)) {
-          combined.push({ ...cred, recipient_id: userId });
-          seen.add(cred.credential_id);
-        }
+    // Always include the foundational baseline credentials if not already present
+    for (const cred of this.db.inMemory.credentials.values()) {
+      if (!seen.has(cred.credential_id) && (cred.credential_id.startsWith('SKP-2026-ALGO') || cred.credential_id.startsWith('SKP-2026-FSD'))) {
+        combined.push({ ...cred, recipient_id: userId });
+        seen.add(cred.credential_id);
       }
     }
+
+    // Sort newest issued credential first
+    combined.sort((a, b) => {
+      const timeA = new Date(a.issued_at || a.created_at || 0).getTime();
+      const timeB = new Date(b.issued_at || b.created_at || 0).getTime();
+      return timeB - timeA;
+    });
 
     // Guarantee that every credential has network verification_url and qr_code generated
     const localIp = getLocalIpAddress();

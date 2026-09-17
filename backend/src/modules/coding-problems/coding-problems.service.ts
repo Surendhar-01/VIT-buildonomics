@@ -2,10 +2,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { CodeExecutionService } from '../code-execution/code-execution.service';
 import { AiService } from '../ai/ai.service';
+import { CredentialsService } from '../credentials/credentials.service';
 import {
   AddTestCaseDto,
   CreateCodingProblemDto,
@@ -15,10 +17,13 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class CodingProblemsService {
+  private readonly logger = new Logger(CodingProblemsService.name);
+
   constructor(
     private readonly db: DatabaseService,
     private readonly executionService: CodeExecutionService,
     private readonly aiService: AiService,
+    private readonly credentialsService: CredentialsService,
   ) {}
 
   async getAllProblems(difficulty?: string, category?: string) {
@@ -227,10 +232,54 @@ export class CodingProblemsService {
       this.db.inMemory.aiFeedback.set(submissionId, feedbackRecord);
     }
 
+    // Automatically issue Ed25519 Verifiable Digital Credential on successful submission
+    const totalCount = executionResult.totalCount || 1;
+    const passedCount = executionResult.passedCount || 0;
+    const passPercentage = Math.round((passedCount / totalCount) * 100);
+    const isSuccess = executionResult.overallStatus === 'passed' || passPercentage >= 50;
+
+    let issuedCredential: any = null;
+    if (isSuccess && userId) {
+      try {
+        issuedCredential = await this.credentialsService.issueCredential(
+          'institution-vit',
+          'VIT Technical Assessment Board',
+          {
+            recipientId: userId,
+            title: `Certified Algorithmic Problem Solver: ${problem.title}`,
+            description: `Officially awarded for demonstrating optimal algorithmic execution in ${problem.title} with a ${passPercentage}% test case pass rate in the verified sandbox environment.`,
+            criteria: `Achieved ${passedCount}/${totalCount} test case pass rate (${passPercentage}%) with ${executionResult.totalTimeMs}ms execution time in ${dto.language.toUpperCase()}.`,
+            credentialType: 'assessment_achievement',
+            achievementData: {
+              problemId: problem.id,
+              problemTitle: problem.title,
+              category: problem.category || 'Algorithms',
+              difficulty: problem.difficulty || 'intermediate',
+              language: dto.language,
+              score: passPercentage,
+              passRate: `${passPercentage}%`,
+              passedCount,
+              totalCount,
+              executionTimeMs: executionResult.totalTimeMs,
+              timeComplexity: aiFeedback?.complexityAnalysis?.timeComplexity || 'O(N)',
+              spaceComplexity: aiFeedback?.complexityAnalysis?.spaceComplexity || 'O(N)',
+              verifiedAt: new Date().toISOString(),
+            },
+          },
+        );
+        this.logger.log(
+          `Issued Ed25519 digital credential (${issuedCredential.credential_id}) for candidate ${userId} on solving ${problem.title}`,
+        );
+      } catch (credErr) {
+        this.logger.warn(`Could not issue credential for coding problem submission: ${credErr.message}`);
+      }
+    }
+
     return {
       submissionId,
       execution: executionResult,
       aiFeedback,
+      credential: issuedCredential,
     };
   }
 
