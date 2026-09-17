@@ -114,6 +114,107 @@ export class DatabaseService implements OnModuleInit {
       updated_at: new Date().toISOString(),
     });
 
+    // Seed candidate Surendhar S (Primary candidate profile)
+    const surendharUserId = 'e393dd34-a2c2-4de6-b954-5b1983d0e304';
+    const surendharProfileId = 'ccce6a37-153a-4e30-bf54-6618faa1ce96';
+    const surendharUser = {
+      id: surendharUserId,
+      email: 'surendharkavin01@gmail.com',
+      full_name: 'Surendhar S',
+      role: 'student',
+    };
+    this.inMemory.users.set(surendharUserId, surendharUser);
+    this.inMemory.users.set(surendharProfileId, surendharUser);
+    this.inMemory.userRoles.set(surendharUserId, ['student']);
+    this.inMemory.userRoles.set(surendharProfileId, ['student']);
+
+    const surendharProfile = {
+      id: surendharProfileId,
+      user_id: surendharUserId,
+      full_name: 'Surendhar S',
+      slug: 'surendhar-s',
+      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      headline: 'Full-Stack Software Engineer & Distributed Systems Builder',
+      bio: 'High-impact Computer Science undergraduate at Vellore Institute of Technology passionate about scalable distributed systems, cloud-native architectures, and cryptographic credential engineering. Experienced in building production-grade web applications with React, Node.js, Python, and PostgreSQL.',
+      location: 'Vijayamangalam, Erode, Tamil Nadu, India',
+      education: 'B.Tech in Computer Science & Engineering',
+      institution: 'Vellore Institute of Technology',
+      graduation_year: 2026,
+      experience: 'Full-Stack Engineering Intern & Open-Source Contributor',
+      github_url: 'https://github.com/Surendhar-01',
+      linkedin_url: 'https://www.linkedin.com/in/surendhar-s-11218132a/',
+      resume_url: '',
+      visibility: 'public',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.inMemory.profiles.set(surendharProfileId, surendharProfile);
+    this.inMemory.profiles.set(surendharUserId, surendharProfile);
+    this.inMemory.profiles.set('surendhar-s', surendharProfile);
+
+    // Seed profile skills for Surendhar S
+    this.inMemory.profileSkills.set(surendharProfileId, [
+      { id: 'ps-s-1', profile_id: surendharProfileId, skill_id: 'sk-1', skill_name: 'React.js & Next.js', proficiency_level: 'advanced', evidence_description: 'Architected responsive modern web applications with state caching, Tailwind CSS, and WebSockets.', verified: true },
+      { id: 'ps-s-2', profile_id: surendharProfileId, skill_id: 'sk-3', skill_name: 'Node.js & NestJS', proficiency_level: 'advanced', evidence_description: 'Designed enterprise-grade REST APIs, dependency injection, and microservices.', verified: true },
+      { id: 'ps-s-3', profile_id: surendharProfileId, skill_id: 'sk-4', skill_name: 'Python & Algorithms', proficiency_level: 'expert', evidence_description: 'Benchmarked with optimal O(N) algorithmic execution and 100% test pass rate in SkillProof sandbox.', verified: true },
+      { id: 'ps-s-4', profile_id: surendharProfileId, skill_id: 'sk-5', skill_name: 'PostgreSQL & Database Systems', proficiency_level: 'advanced', evidence_description: 'Engineered relational schemas, indexes, and ACID transactions.', verified: true },
+      { id: 'ps-s-5', profile_id: surendharProfileId, skill_id: 'sk-7', skill_name: 'Docker & Cloud Infrastructure', proficiency_level: 'intermediate', evidence_description: 'Containerized multi-stage microservices and configured automated CI/CD pipelines.', verified: true },
+      { id: 'ps-s-6', profile_id: surendharProfileId, skill_id: 'sk-6', skill_name: 'System Design & Cryptography', proficiency_level: 'advanced', evidence_description: 'Implemented Ed25519 asymmetric signature schemes and public QR verification.', verified: true },
+    ]);
+    this.inMemory.profileSkills.set(surendharUserId, this.inMemory.profileSkills.get(surendharProfileId));
+
+    // Seed projects for Surendhar S
+    const pSurendhar1 = {
+      id: 'proj-surendhar-1',
+      profile_id: surendharProfileId,
+      title: 'Cloud-Native Microservices Suite',
+      description: 'High-performance microservices architecture with asynchronous task queues, Redis caching, and Docker containerization. Benchmarked with sub-50ms latency under high concurrent load.',
+      technologies: ['Python', 'Docker', 'Redis', 'REST APIs', 'Microservices', 'CI/CD'],
+      repository_url: 'https://github.com/Surendhar-01',
+      live_url: 'https://github.com/Surendhar-01',
+      visibility: 'public',
+      created_at: '2026-01-10T00:00:00.000Z',
+    };
+    const pSurendhar2 = {
+      id: 'proj-surendhar-2',
+      profile_id: surendharProfileId,
+      title: 'Scalable Web Application Platform',
+      description: 'Production-grade full-stack web application with secure cryptographic authentication, real-time reactive interface, PostgreSQL relational schema, and role-based access control.',
+      technologies: ['React', 'Node.js', 'NestJS', 'PostgreSQL', 'Tailwind CSS', 'REST APIs'],
+      repository_url: 'https://github.com/Surendhar-01',
+      live_url: 'https://github.com/Surendhar-01',
+      visibility: 'public',
+      created_at: '2026-01-20T00:00:00.000Z',
+    };
+    const pSurendhar3 = {
+      id: 'proj-surendhar-3',
+      profile_id: surendharProfileId,
+      title: 'AI-Assisted Skill Proof & Verification Engine',
+      description: 'Cryptographically verifiable credential issuance engine utilizing Ed25519 asymmetric signatures and tamper-evident QR verification for candidate skills.',
+      technologies: ['TypeScript', 'NestJS', 'Ed25519', 'QR Code', 'Supabase', 'Jest'],
+      repository_url: 'https://github.com/Surendhar-01',
+      live_url: 'https://github.com/Surendhar-01',
+      visibility: 'public',
+      created_at: '2026-02-01T00:00:00.000Z',
+    };
+    this.inMemory.projects.set(pSurendhar1.id, pSurendhar1);
+    this.inMemory.projects.set(pSurendhar2.id, pSurendhar2);
+    this.inMemory.projects.set(pSurendhar3.id, pSurendhar3);
+
+    // Seed published portfolio for Surendhar S
+    const surendharPortfolio = {
+      id: 'port-surendhar-s',
+      profile_id: surendharProfileId,
+      title: 'Surendhar S — Verified Engineer Portfolio',
+      slug: 'surendhar-s',
+      template: 'modern-minimal',
+      theme: 'dark-indigo',
+      is_published: true,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: new Date().toISOString(),
+    };
+    this.inMemory.portfolios.set('port-surendhar-s', surendharPortfolio);
+
     // Seed default recruiter demo profile
     const recruiterUser = {
       id: 'demo-recruiter-uuid',

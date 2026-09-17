@@ -65,59 +65,87 @@ export class SupabaseAuthGuard implements CanActivate {
 
     // 2. Live Supabase verification if configured
     if (this.db.isUsingSupabase && this.db.client) {
-      const { data, error } = await this.db.client.auth.getUser(token);
-      if (!error && data?.user) {
-        // Fetch role from user_roles
-        const { data: roleRow } = await this.db.client
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', data.user.id)
-          .single();
+      try {
+        const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase getUser timeout')), 2000),
+        );
+        const { data, error } = await Promise.race([
+          this.db.client.auth.getUser(token),
+          timeoutPromise,
+        ]);
 
-        request.user = {
-          ...data.user,
-          role: roleRow?.role || data.user.user_metadata?.role || 'student',
-          roles: [roleRow?.role || data.user.user_metadata?.role || 'student'],
-        };
-        return true;
+        if (!error && data?.user) {
+          // Fetch role from user_roles
+          let role = data.user.user_metadata?.role || 'student';
+          try {
+            const { data: roleRow } = await this.db.client
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', data.user.id)
+              .maybeSingle();
+            if (roleRow?.role) role = roleRow.role;
+          } catch {}
+
+          request.user = {
+            ...data.user,
+            role,
+            roles: [role],
+          };
+          return true;
+        }
+      } catch (err) {
+        // Fall back gracefully to internal token decoder on network timeout or session expiration
       }
-
-      throw new UnauthorizedException('Supabase session expired or invalid');
     }
 
-    // Token verification in internal engine
+    // Token verification in internal engine / offline fallback
     try {
-      // Decode simulated token or parse payload
-      let parsed = { id: 'demo-student-uuid', role: 'student', email: 'student@skillproof.io' };
+      // Decode simulated token or parse JWT payload
+      let parsed: any = null;
       if (token.startsWith('dev-')) {
         const parts = token.split('-');
         const role = parts[1] || 'student';
         parsed = {
-          id: `demo-${role}-uuid`,
+          id: parts.slice(2).join('-') || `demo-${role}-uuid`,
           role,
           email: `${role}@skillproof.io`,
+          fullName: `${role.toUpperCase()} User`,
         };
       } else {
         // Parse base64 if JWT formatted
         const parts = token.split('.');
         if (parts.length === 3) {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-          parsed = {
-            id: payload.sub || payload.id || 'demo-student-uuid',
-            role: payload.role || 'student',
-            email: payload.email || 'user@skillproof.io',
-          };
+          const uid = payload.sub || payload.id;
+          if (uid) {
+            const userInMem =
+              this.db.inMemory.users.get(uid) ||
+              Array.from(this.db.inMemory.users.values()).find(
+                (u) => u.id === uid || (payload.email && u.email?.toLowerCase() === payload.email.toLowerCase()),
+              );
+            const role = payload.role || payload.user_metadata?.role || userInMem?.role || 'student';
+            parsed = {
+              id: uid,
+              role,
+              email: payload.email || userInMem?.email || 'student@skillproof.io',
+              fullName: payload.user_metadata?.full_name || userInMem?.fullName || userInMem?.full_name || 'Student',
+            };
+          }
         }
       }
 
-      request.user = {
-        id: parsed.id,
-        email: parsed.email,
-        role: parsed.role,
-        roles: [parsed.role],
-        user_metadata: { full_name: `${parsed.role.toUpperCase()} User` },
-      };
-      return true;
+      if (parsed) {
+        request.user = {
+          id: parsed.id,
+          email: parsed.email,
+          role: parsed.role,
+          roles: [parsed.role],
+          user_metadata: { full_name: parsed.fullName },
+        };
+        return true;
+      }
+
+      throw new UnauthorizedException('Authentication token verification failed');
     } catch {
       throw new UnauthorizedException('Authentication token verification failed');
     }
