@@ -245,28 +245,78 @@ export class AiService {
   }
 
   async generateSkillGapAnalysis(dto: SkillGapDto) {
-    const commonRoles: Record<string, string[]> = {
-      'full stack': ['React.js', 'Node.js', 'PostgreSQL', 'TypeScript', 'Docker', 'RESTful APIs', 'System Design'],
-      'backend': ['Node.js', 'NestJS', 'PostgreSQL', 'Docker', 'System Design', 'Redis', 'Microservices'],
-      'frontend': ['React.js', 'TypeScript', 'Next.js', 'Tailwind CSS', 'State Management', 'Web Performance'],
-      'ai': ['Python', 'PyTorch', 'Vector Databases', 'Prompt Engineering', 'LangChain', 'FastAPI'],
+    const commonRoles: Record<
+      string,
+      {
+        skills: string[];
+        assessments: string[];
+        actionTemplate?: (skill: string) => string;
+      }
+    > = {
+      'full stack': {
+        skills: ['React.js', 'Node.js', 'PostgreSQL', 'TypeScript', 'Docker', 'RESTful APIs', 'System Design'],
+        assessments: ['Full-Stack Algorithmic Benchmark', 'Core Data Structures Assessment', 'RESTful Architecture Challenge'],
+      },
+      'backend': {
+        skills: ['Node.js', 'NestJS', 'PostgreSQL', 'Docker', 'System Design', 'Redis', 'Microservices', 'Kafka'],
+        assessments: ['Backend High-Throughput Challenge', 'Relational Schema & Query Optimization', 'Distributed Systems Benchmark'],
+      },
+      'frontend': {
+        skills: ['React.js', 'TypeScript', 'Next.js', 'Tailwind CSS', 'UI/UX Design Systems', 'Web Performance', 'State Management'],
+        assessments: ['Advanced React Performance Test', 'CSS Architecture & Design Systems', 'Modern TypeScript Patterns'],
+      },
+      'ai': {
+        skills: ['Python', 'PyTorch', 'Vector Databases', 'Prompt Engineering', 'LangChain', 'FastAPI', 'MLOps'],
+        assessments: ['Python Data & Algorithm Mastery', 'Applied Machine Learning Pipeline', 'Vector Search & Embedding Systems'],
+      },
+      'devops': {
+        skills: ['Docker', 'Kubernetes', 'AWS / Cloud Architecture', 'Terraform', 'CI/CD Pipelines', 'Linux Administration', 'Prometheus & Grafana'],
+        assessments: ['Cloud Infrastructure Benchmark', 'Container Orchestration & K8s', 'CI/CD Security & Automation'],
+      },
+      'cybersecurity': {
+        skills: ['Network Security', 'Cryptography & Ed25519', 'OWASP Top 10', 'Penetration Testing', 'Linux Hardening', 'SIEM & SOC', 'API Security'],
+        assessments: ['Cryptographic Principles & Ed25519', 'Web Application Security Audit', 'Defensive Hardening Challenge'],
+      },
+      'data': {
+        skills: ['Python', 'SQL & PostgreSQL', 'Apache Spark', 'Data Warehousing', 'Airflow', 'Kafka', 'dbt'],
+        assessments: ['Complex SQL & Aggregations', 'Streaming Data Pipeline Architecture', 'Data Modeling & ETL Optimization'],
+      },
+      'mobile': {
+        skills: ['React Native', 'Flutter', 'TypeScript', 'Mobile State Management', 'Native Device APIs', 'Mobile CI/CD', 'Offline Storage'],
+        assessments: ['Mobile Architecture & Lifecycle', 'Cross-Platform UI Performance', 'Offline-First Data Synchronization'],
+      },
+      'blockchain': {
+        skills: ['Solidity', 'Ethereum & EVM', 'Smart Contract Security', 'Ethers.js', 'Hardhat / Foundry', 'Cryptography', 'DeFi Protocols'],
+        assessments: ['Smart Contract Logic & Gas Optimization', 'Digital Signature & Key Custody', 'EVM Protocol Vulnerability Audit'],
+      },
+      'reliability': {
+        skills: ['Go', 'Linux Kernel & Shell', 'Kubernetes', 'SLO/SLI Engineering', 'Chaos Engineering', 'Distributed Tracing', 'Incident Management'],
+        assessments: ['High-Concurrency Systems in Go', 'Linux Performance Profiling', 'Site Reliability & Fault Recovery'],
+      },
     };
 
-    const roleKey = Object.keys(commonRoles).find((k) =>
-      dto.targetRole.toLowerCase().includes(k),
-    ) || 'full stack';
+    const norm = (dto.targetRole || '').toLowerCase();
+    const roleKey =
+      Object.keys(commonRoles).find((k) => norm.includes(k)) ||
+      (norm.includes('cloud') ? 'devops' : '') ||
+      (norm.includes('sre') ? 'reliability' : '') ||
+      (norm.includes('security') || norm.includes('hacker') ? 'cybersecurity' : '') ||
+      (norm.includes('ml') || norm.includes('machine learning') ? 'ai' : '') ||
+      (norm.includes('web3') ? 'blockchain' : '') ||
+      'full stack';
 
-    const targetSkills = commonRoles[roleKey];
-    const currentLower = dto.currentSkills.map((s) => s.toLowerCase());
+    const roleData = commonRoles[roleKey] || commonRoles['full stack'];
+    const targetSkills = roleData.skills;
+    const currentLower = (dto.currentSkills || []).map((s) => s.toLowerCase());
 
     const missingSkills = targetSkills.filter(
-      (ts) => !currentLower.some((cs) => cs.includes(ts.toLowerCase())),
+      (ts) => !currentLower.some((cs) => cs.includes(ts.toLowerCase()) || ts.toLowerCase().includes(cs)),
     );
 
     const roadmap = missingSkills.map((skill, index) => ({
       step: index + 1,
       skill,
-      action: `Complete hands-on projects and assessments focused on ${skill}.`,
+      action: `Master ${skill} through practical implementation, hands-on architectural design, and verified benchmarking.`,
       estimatedHours: 12 + index * 4,
     }));
 
@@ -276,14 +326,11 @@ export class AiService {
         ((targetSkills.length - missingSkills.length) / targetSkills.length) * 100,
       ),
       verifiedSkillsPresent: targetSkills.filter((ts) =>
-        currentLower.some((cs) => cs.includes(ts.toLowerCase())),
+        currentLower.some((cs) => cs.includes(ts.toLowerCase()) || ts.toLowerCase().includes(cs)),
       ),
       missingCriticalSkills: missingSkills,
       recommendedRoadmap: roadmap,
-      recommendedAssessments: [
-        'Full-Stack Algorithmic Benchmark',
-        'Core Data Structures Assessment',
-      ],
+      recommendedAssessments: roleData.assessments,
     };
   }
 
