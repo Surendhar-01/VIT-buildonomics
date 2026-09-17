@@ -225,6 +225,13 @@ class ApiService {
     return this.request(`/assessments/attempts/${attemptId}/result`);
   }
 
+  async disqualifyAssessment(id, attemptId, reason, violationsLog = []) {
+    return this.request(`/assessments/${id}/disqualify`, {
+      method: 'POST',
+      body: JSON.stringify({ attemptId, reason, violationsLog }),
+    });
+  }
+
   // Credentials & Verification
   async getMyCredentials() {
     return this.request('/credentials/me');

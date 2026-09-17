@@ -194,6 +194,65 @@ export class AssessmentsService {
     return updated;
   }
 
+  async disqualifyAssessment(
+    assessmentId: string,
+    candidateId: string,
+    body: { attemptId?: string; reason: string; violationsLog?: any[] },
+  ) {
+    const attemptId = body.attemptId || uuidv4();
+    let attempt = this.db.inMemory.assessmentAttempts.get(attemptId);
+    if (!attempt && this.db.isUsingSupabase && this.db.client && body.attemptId) {
+      try {
+        const { data } = await this.db.client
+          .from('assessment_attempts')
+          .select('*')
+          .eq('id', attemptId)
+          .single();
+        attempt = data;
+      } catch {}
+    }
+
+    const disqualifiedAt = new Date().toISOString();
+    const updated = {
+      ...(attempt || {
+        id: attemptId,
+        assessment_id: assessmentId,
+        candidate_id: candidateId,
+        started_at: disqualifiedAt,
+      }),
+      status: 'disqualified',
+      total_score: 0,
+      percentage: 0,
+      submitted_at: disqualifiedAt,
+      violation_reason: body.reason || 'Prohibited action detected during proctored session',
+      violations_log: body.violationsLog || [],
+    };
+
+    if (this.db.isUsingSupabase && this.db.client) {
+      try {
+        await this.db.client
+          .from('assessment_attempts')
+          .upsert(updated)
+          .eq('id', attemptId);
+      } catch {}
+    }
+
+    this.db.inMemory.assessmentAttempts.set(attemptId, updated);
+    this.db.logAudit(candidateId, 'ASSESSMENT_DISQUALIFIED', 'assessment_attempt', attemptId, {
+      reason: body.reason,
+      violationsCount: body.violationsLog?.length || 1,
+    });
+
+    return {
+      success: true,
+      disqualified: true,
+      attemptId,
+      reason: body.reason,
+      disqualifiedAt,
+      message: 'Candidate disqualified due to anti-cheat proctoring violation. Credential eligibility revoked.',
+    };
+  }
+
   async getAttemptResult(attemptId: string) {
     let attempt = this.db.inMemory.assessmentAttempts.get(attemptId);
     if (!attempt && this.db.isUsingSupabase && this.db.client) {
@@ -207,6 +266,19 @@ export class AssessmentsService {
 
     if (!attempt) {
       throw new NotFoundException('Attempt not found');
+    }
+
+    if (attempt.status === 'disqualified') {
+      return {
+        attempt,
+        submissions: [],
+        skillSummary: {
+          accuracy: 0,
+          speedRating: 'Disqualified',
+          timeComplexityScore: 'Disqualified',
+          recommendedNextStep: `Assessment rejected due to proctoring violation: ${attempt.violation_reason || 'Prohibited actions detected'}. Credential generation (Ed25519) revoked.`,
+        },
+      };
     }
 
     // Look up associated submissions

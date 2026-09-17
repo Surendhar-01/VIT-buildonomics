@@ -85,6 +85,18 @@ export class AssessmentsController {
     return this.assessmentsService.submitAssessment(dto, candidateId);
   }
 
+  @Post(':id/disqualify')
+  @UseGuards(SupabaseAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disqualify candidate for proctoring violation' })
+  async disqualifyAssessment(
+    @Param('id') id: string,
+    @CurrentUser('id') candidateId: string,
+    @Body() body: { attemptId?: string; reason: string; violationsLog?: any[] },
+  ) {
+    return this.assessmentsService.disqualifyAssessment(id, candidateId, body);
+  }
+
   @Post()
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles('admin')
