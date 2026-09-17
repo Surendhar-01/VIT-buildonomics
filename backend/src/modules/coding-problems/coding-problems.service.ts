@@ -238,8 +238,16 @@ export class CodingProblemsService {
     const passPercentage = Math.round((passedCount / totalCount) * 100);
     const isSuccess = executionResult.overallStatus === 'passed' || passPercentage >= 50;
 
+    let isDisqualified = false;
+    if (dto.attemptId) {
+      const attempt = this.db.inMemory.assessmentAttempts.get(dto.attemptId);
+      if (attempt?.status === 'disqualified') {
+        isDisqualified = true;
+      }
+    }
+
     let issuedCredential: any = null;
-    if (isSuccess && userId) {
+    if (isSuccess && userId && !isDisqualified) {
       try {
         issuedCredential = await this.credentialsService.issueCredential(
           'institution-vit',

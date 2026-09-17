@@ -161,6 +161,12 @@ export class AssessmentsService {
       throw new NotFoundException('Assessment attempt not found');
     }
 
+    if (attempt.status === 'disqualified') {
+      throw new BadRequestException(
+        'Candidate attempt has been disqualified due to proctoring violations. Credential eligibility is revoked.',
+      );
+    }
+
     // Calculate score based on submissions for this attempt
     let totalScore = 0;
     let maxPossibleScore = 100;

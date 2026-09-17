@@ -1,11 +1,14 @@
 const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
   if (typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname;
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
       return `http://${host}:4000/api`;
     }
   }
-  return import.meta.env.VITE_API_URL || 'http://172.18.229.52:4000/api';
+  return 'http://localhost:4000/api';
 };
 
 class ApiService {

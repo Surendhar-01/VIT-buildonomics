@@ -20,11 +20,186 @@ import {
   Ban,
   ShieldCheck,
   Video,
+  AlertTriangle,
+  Check,
+  Camera,
+  Mic,
+  Eye,
+  EyeOff,
+  Volume2,
 } from 'lucide-react';
 import CodeEditor from '../components/CodeEditor';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
-import ProctorMonitor from '../components/ProctorMonitor';
+import ProctorWidget from '../components/ProctorWidget';
+
+/**
+ * Live hardware self-check preview component for candidate verification before test entry
+ */
+function HardwareSelfCheck({ onHardwareReady, streamRef }) {
+  const videoRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const [cameraOk, setCameraOk] = useState(false);
+  const [micOk, setMicOk] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+    let stream = null;
+
+    async function initPreview() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 320, height: 240, facingMode: 'user' },
+          audio: true,
+        });
+
+        if (!isMounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        if (streamRef) {
+          streamRef.current = stream;
+        }
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+        setCameraOk(true);
+
+        // Audio volume meter
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            const ctx = new AudioContextClass();
+            audioCtxRef.current = ctx;
+            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+            const source = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const checkMic = () => {
+              if (!isMounted) return;
+              analyser.getByteTimeDomainData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) {
+                const norm = (dataArray[i] - 128) / 128;
+                sum += norm * norm;
+              }
+              const rms = Math.sqrt(sum / dataArray.length);
+              const lvl = Math.min(100, Math.round(rms * 280));
+              setMicLevel(lvl);
+              requestAnimationFrame(checkMic);
+            };
+            requestAnimationFrame(checkMic);
+          }
+          setMicOk(true);
+        } catch {
+          setMicOk(true);
+        }
+
+        if (onHardwareReady) onHardwareReady(true);
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('Hardware self-check error:', err);
+        setErrorMsg(
+          'Webcam and microphone access are required for proctored examinations. Please grant camera and microphone permissions in your browser.',
+        );
+        if (onHardwareReady) onHardwareReady(false);
+      }
+    }
+
+    initPreview();
+
+    return () => {
+      isMounted = false;
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        audioCtxRef.current.close().catch(() => {});
+      }
+    };
+  }, [onHardwareReady, streamRef]);
+
+  return (
+    <div className="rounded-3xl bg-slate-900 border border-slate-800 p-5 space-y-4 text-white shadow-xl">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center gap-2">
+          <Camera className="w-4 h-4 text-indigo-400" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+            Hardware Self-Check
+          </h3>
+        </div>
+        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono font-semibold">
+          LIVE PREVIEW
+        </span>
+      </div>
+
+      {errorMsg ? (
+        <div className="p-4 rounded-2xl bg-rose-950/80 border border-rose-500 text-xs text-rose-200 space-y-2">
+          <div className="flex items-center gap-2 font-bold text-rose-400">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Hardware Permission Required</span>
+          </div>
+          <p className="text-[11px] leading-relaxed text-slate-300">{errorMsg}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Mirrored Camera Preview */}
+          <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-inner">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover transform -scale-x-100"
+            />
+            <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-[10px] font-mono text-emerald-400 flex items-center gap-1.5 border border-emerald-500/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>SENSOR ACTIVE</span>
+            </div>
+
+            {/* Mic Meter in Video Overlay */}
+            <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/70 backdrop-blur-xs text-[10px] border border-white/10">
+              <Mic className={`w-3.5 h-3.5 ${micLevel > 15 ? 'text-rose-400 animate-pulse' : 'text-slate-400'}`} />
+              <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-400 transition-all duration-75"
+                  style={{ width: `${Math.min(100, micLevel * 2)}%` }}
+                />
+              </div>
+              <span className="text-[9px] font-mono text-slate-300">{micLevel}%</span>
+            </div>
+          </div>
+
+          {/* Diagnostic status indicators */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60">
+              <CheckCircle2 className={`w-4 h-4 ${cameraOk ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <div>
+                <div className="font-semibold text-slate-200 text-[11px]">Camera Video</div>
+                <div className="text-[10px] text-slate-400 font-mono">{cameraOk ? 'Signal Verified' : 'Initializing...'}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60">
+              <CheckCircle2 className={`w-4 h-4 ${micOk ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <div>
+                <div className="font-semibold text-slate-200 text-[11px]">Microphone Audio</div>
+                <div className="text-[10px] text-slate-400 font-mono">{micOk ? 'RMS Analyser' : 'Initializing...'}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AssessmentTakePage() {
   const { id } = useParams();
@@ -44,6 +219,16 @@ export default function AssessmentTakePage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
+  // Pre-test & Terms State
+  const [testStarted, setTestStarted] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [faceWarning, setFaceWarning] = useState(false);
+  const [hardwareReady, setHardwareReady] = useState(false);
+  const selfCheckStreamRef = useRef(null);
+
+  // Derived: All sample & benchmark test cases must pass to unlock submission
+  const allTestsPassed = executionResult && (executionResult.allPassed === true || executionResult.overallStatus === 'passed');
+
   // Proctoring & Anti-Cheat State
   const [attemptId, setAttemptId] = useState(null);
   const [violationsCount, setViolationsCount] = useState(0);
@@ -53,6 +238,25 @@ export default function AssessmentTakePage() {
   const [disqualificationReason, setDisqualificationReason] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasStartedProctoring, setHasStartedProctoring] = useState(false);
+
+  // Start Assessment handler: stops preview hardware tracks, enters fullscreen, starts test
+  const handleStartAssessment = async () => {
+    if (selfCheckStreamRef.current) {
+      selfCheckStreamRef.current.getTracks().forEach((t) => t.stop());
+      selfCheckStreamRef.current = null;
+    }
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (err) {
+      console.warn('Fullscreen request bypassed or not permitted:', err);
+    }
+    setTestStarted(true);
+    setTimeout(() => {
+      setHasStartedProctoring(true);
+    }, 1500);
+  };
 
   // Sound synthesized with Web Audio API
   const playWarningChime = () => {
@@ -209,8 +413,6 @@ export default function AssessmentTakePage() {
         setLoadError(err.message || 'Failed to load assessment environment.');
       } finally {
         setLoading(false);
-        // Delay boundary listeners slightly so initial hardware setup doesn't false-trigger
-        setTimeout(() => setHasStartedProctoring(true), 2500);
       }
     }
     loadData();
@@ -218,7 +420,7 @@ export default function AssessmentTakePage() {
 
   // Tab-Switch, Blur & Fullscreen Listeners
   useEffect(() => {
-    if (loading || isDisqualified || !hasStartedProctoring) return;
+    if (!testStarted || loading || isDisqualified || !hasStartedProctoring) return;
 
     // 1. Tab switch listener
     const handleVisibilityChange = () => {
@@ -263,7 +465,7 @@ export default function AssessmentTakePage() {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [loading, isDisqualified, hasStartedProctoring]);
+  }, [testStarted, loading, isDisqualified, hasStartedProctoring]);
 
   // Switch between problems in the assessment suite
   const handleSelectProblem = async (index) => {
@@ -302,12 +504,12 @@ export default function AssessmentTakePage() {
 
   // Countdown timer
   useEffect(() => {
-    if (isDisqualified) return;
+    if (!testStarted || isDisqualified) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
-  }, [isDisqualified]);
+  }, [testStarted, isDisqualified]);
 
   const formatTime = (secs) => {
     const m = Math.floor(secs / 60);
@@ -424,6 +626,202 @@ export default function AssessmentTakePage() {
     );
   }
 
+  // Pre-Test Candidate Instructions Screen
+  if (!testStarted) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-6 py-4 animate-in fade-in pb-12">
+        {/* Top Header Card */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-white border border-slate-200 rounded-3xl shadow-xs">
+          <div className="flex items-center gap-3">
+            <Link
+              to="/assessments"
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors border border-slate-200"
+              title="Back to assessments"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-extrabold text-slate-900">
+                  {assessment?.title || problem?.title || 'Algorithmic Assessment Benchmark'}
+                </h1>
+                <Badge variant="cyan" className="text-[10px] capitalize">
+                  {assessment?.difficulty || problem?.difficulty || 'intermediate'}
+                </Badge>
+                <Badge variant="brand" className="text-[10px]">
+                  {assessment?.category || problem?.category || 'Algorithms'}
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Candidate Proctoring Protocol & System Readiness Verification
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-xs text-indigo-700 font-mono font-semibold">
+              <Clock className="w-4 h-4 text-indigo-600" />
+              <span>Duration: {Math.round(timeLeft / 60)} Minutes</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2-Column Split: Hardware Check & Proctoring Rules */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Live Hardware Self-Check (5 cols) */}
+          <div className="lg:col-span-5 space-y-4">
+            <HardwareSelfCheck
+              onHardwareReady={setHardwareReady}
+              streamRef={selfCheckStreamRef}
+            />
+
+            {/* Environmental Setup Tips */}
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-2.5 text-xs text-slate-600">
+              <div className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                <span>Environment Pre-Check</span>
+              </div>
+              <ul className="space-y-1.5 text-[11px] text-slate-600 list-disc list-inside">
+                <li>Position yourself centered in frame with adequate lighting.</li>
+                <li>Ensure a quiet environment; speaking or voices trigger strikes.</li>
+                <li>Close other browser tabs, IDEs, and messaging applications.</li>
+                <li>Full-screen examination mode will engage upon starting.</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Right Column: Strict Rules & Agreement (7 cols) */}
+          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col justify-between space-y-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">
+                    Proctoring Regulations & Honor Code
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Strict adherence is required to maintain verifiable credential eligibility.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 text-[10px] font-bold border border-rose-200">
+                  2-Strike Policy
+                </span>
+              </div>
+
+              {/* Rules Grid */}
+              <div className="space-y-3 text-xs">
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 mt-0.5 shrink-0">
+                    <Camera className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="text-slate-800 block text-xs font-bold">
+                      1. Continuous Face-Absence Tracking
+                    </strong>
+                    <span className="text-slate-600 text-[11px] leading-relaxed">
+                      Your face must remain clearly visible. If your face leaves the frame for &gt; 3 seconds, an urgent warning banner will appear. Leaving for &gt; 10 seconds triggers a violation strike.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 mt-0.5 shrink-0">
+                    <Mic className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="text-slate-800 block text-xs font-bold">
+                      2. Voice & Audio Monitoring (RMS Analysis)
+                    </strong>
+                    <span className="text-slate-600 text-[11px] leading-relaxed">
+                      Speaking aloud, whispering, or external background voices detected for &gt; 1.5 seconds trigger an immediate violation strike.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 mt-0.5 shrink-0">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="text-slate-800 block text-xs font-bold">
+                      3. No Tab-Switching or Window Blurring
+                    </strong>
+                    <span className="text-slate-600 text-[11px] leading-relaxed">
+                      Switching browser tabs, minimizing the window, or clicking into other software applications triggers an immediate strike.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 mt-0.5 shrink-0">
+                    <Maximize className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="text-slate-800 block text-xs font-bold">
+                      4. Mandatory Fullscreen Mode
+                    </strong>
+                    <span className="text-slate-600 text-[11px] leading-relaxed">
+                      The assessment runs strictly in fullscreen. Pressing Escape or exiting fullscreen is recorded as a violation strike.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 mt-0.5 shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="text-emerald-900 block text-xs font-bold">
+                      5. Test-Case-Gated Submission
+                    </strong>
+                    <span className="text-emerald-800 text-[11px] leading-relaxed">
+                      The "Submit Assessment" button is unlocked only when your solution passes 100% of the sample and benchmark test cases in the execution sandbox.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Terms Checkbox and Start Button */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <label className="flex items-start gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100/70 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span className="text-xs text-slate-800 leading-relaxed font-medium select-none">
+                  I agree to the proctoring terms and understand that violations will lead to immediate disqualification.
+                </span>
+              </label>
+
+              <button
+                onClick={handleStartAssessment}
+                disabled={!agreedToTerms || !hardwareReady}
+                className={`w-full py-3.5 px-6 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer ${
+                  agreedToTerms && hardwareReady
+                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 active:scale-[0.99]'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+                }`}
+              >
+                <Maximize className="w-4 h-4" />
+                <span>Start Assessment & Enter Fullscreen</span>
+              </button>
+
+              {(!agreedToTerms || !hardwareReady) && (
+                <p className="text-[11px] text-slate-500 text-center">
+                  {!hardwareReady
+                    ? 'Grant webcam & mic permissions above to enable starting.'
+                    : 'Accept the proctoring terms above to start the assessment.'}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 animate-in fade-in pb-12 relative">
       {/* Proctoring Status & Strike Counter Strip */}
@@ -468,6 +866,21 @@ export default function AssessmentTakePage() {
           </button>
         </div>
       </div>
+
+      {/* Face-Absence High-Priority Alert Banner */}
+      {faceWarning && !isDisqualified && (
+        <div className="p-3.5 rounded-2xl bg-amber-500 text-slate-950 font-bold flex items-center justify-between gap-3 shadow-lg shadow-amber-500/20 animate-pulse border-2 border-amber-600">
+          <div className="flex items-center gap-2.5 text-xs sm:text-sm">
+            <AlertTriangle className="w-5 h-5 text-slate-950 shrink-0 animate-bounce" />
+            <span>
+              ⚠️ WARNING: Face not detected in camera frame! Look directly at the screen to prevent disqualification.
+            </span>
+          </div>
+          <span className="text-[10px] uppercase font-black tracking-widest px-2.5 py-0.5 rounded-lg bg-slate-950 text-amber-400">
+            CRITICAL WARNING
+          </span>
+        </div>
+      )}
 
       {/* Top Assessment Navigation & Controls Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
@@ -521,16 +934,34 @@ export default function AssessmentTakePage() {
             Run Tests
           </Button>
 
-          <Button
-            onClick={handleSubmitSolution}
-            variant="primary"
-            size="sm"
-            loading={submitting}
-            disabled={isDisqualified}
-            icon={Send}
-          >
-            Submit Assessment
-          </Button>
+          {/* Gated Submit Button: enabled only if all test cases pass */}
+          <div className="relative group">
+            <Button
+              onClick={handleSubmitSolution}
+              variant={allTestsPassed ? 'success' : 'primary'}
+              size="sm"
+              loading={submitting}
+              disabled={submitting || !allTestsPassed || isDisqualified}
+              icon={allTestsPassed ? Check : Send}
+              className={
+                allTestsPassed
+                  ? '!bg-emerald-600 hover:!bg-emerald-500 !text-white !border-emerald-600 shadow-sm shadow-emerald-600/30 cursor-pointer font-bold'
+                  : 'opacity-60 cursor-not-allowed border-slate-300'
+              }
+              title={
+                !allTestsPassed
+                  ? 'All sample & benchmark test cases must pass before submission is enabled.'
+                  : 'Submit Verified Solution'
+              }
+            >
+              {allTestsPassed ? 'Submit Verified Solution' : 'Submit Assessment'}
+            </Button>
+            {!allTestsPassed && !isDisqualified && (
+              <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block z-30 w-64 p-2 bg-slate-900 text-white text-[11px] rounded-xl shadow-xl border border-slate-800 text-center pointer-events-none">
+                All sample & benchmark test cases must pass before submission is enabled.
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -734,26 +1165,32 @@ export default function AssessmentTakePage() {
       </div>
 
       {/* Floating Picture-in-Picture Webcam & Audio Monitor */}
-      <ProctorMonitor onViolation={handleViolation} isLocked={isDisqualified} />
+      {testStarted && (
+        <ProctorWidget
+          onViolation={handleViolation}
+          onFaceWarning={setFaceWarning}
+          isLocked={isDisqualified}
+        />
+      )}
 
       {/* STRIKE 1: URGENT WARNING MODAL */}
       {warningModal && !isDisqualified && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white border-2 border-amber-500 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-16 h-16 rounded-3xl bg-amber-50 border-2 border-amber-300 text-amber-600 flex items-center justify-center mx-auto animate-bounce">
+          <div className="bg-white border-2 border-rose-500 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-16 h-16 rounded-3xl bg-rose-50 border-2 border-rose-300 text-rose-600 flex items-center justify-center mx-auto animate-bounce">
               <ShieldAlert className="w-9 h-9" />
             </div>
 
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold uppercase tracking-wider mb-2">
-                Warning Strike 1/2
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-100 border border-rose-300 text-rose-900 text-xs font-bold uppercase tracking-wider mb-2">
+                Violation Strike 1/2
               </div>
               <h2 className="text-xl font-extrabold text-slate-900">
-                Prohibited Action Detected
+                Proctoring Violation Strike
               </h2>
-              <p className="text-xs font-semibold text-rose-600 mt-1 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
-                {warningModal.reason}
-              </p>
+              <div className="text-xs font-bold text-rose-700 mt-2 bg-rose-50 p-3 rounded-2xl border border-rose-200 leading-relaxed text-left">
+                Violation Strike 1/2: {warningModal.reason}. One more violation will immediately disqualify you.
+              </div>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
@@ -765,7 +1202,7 @@ export default function AssessmentTakePage() {
                 setWarningModal(null);
                 toggleFullscreen();
               }}
-              className="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-all shadow-md shadow-amber-600/30 cursor-pointer"
+              className="w-full py-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-all shadow-md shadow-rose-600/30 cursor-pointer"
             >
               I Understand — Resume Assessment in Fullscreen
             </button>
@@ -791,8 +1228,8 @@ export default function AssessmentTakePage() {
               <h1 className="text-2xl sm:text-3xl font-black text-rose-500 tracking-tight">
                 CANDIDATE DISQUALIFIED
               </h1>
-              <p className="text-xs text-slate-300">
-                Your assessment has been automatically locked due to repeated anti-cheat proctoring violations.
+              <p className="text-xs text-slate-300 font-medium">
+                Your test attempt has been aborted. Credential eligibility is revoked.
               </p>
             </div>
 
@@ -801,10 +1238,11 @@ export default function AssessmentTakePage() {
               <div className="text-rose-400 font-bold uppercase tracking-wider text-[10px]">
                 Disqualification Reason:
               </div>
-              <div className="text-slate-200 font-semibold">
+              <div className="text-slate-200 font-semibold text-sm">
                 {disqualificationReason || 'Exceeded maximum permitted proctoring violation strikes.'}
               </div>
               <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <div>• Notice: <strong className="text-rose-400">Your test attempt has been aborted. Credential eligibility is revoked.</strong></div>
                 <div>• Assessment score recorded as: <strong className="text-rose-400 font-mono">0 / 100 (0%)</strong></div>
                 <div>• Verifiable Credential generation (Ed25519): <strong className="text-rose-400 font-mono">REVOKED</strong></div>
                 <div>• Total Proctoring Strikes: <strong className="text-rose-400 font-mono">2 / 2</strong></div>
@@ -830,9 +1268,9 @@ export default function AssessmentTakePage() {
 
             <button
               onClick={() => navigate('/dashboard')}
-              className="w-full py-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-all shadow-lg shadow-rose-600/40 cursor-pointer"
+              className="w-full py-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg shadow-rose-600/40 cursor-pointer"
             >
-              Acknowledge Disqualification & Return to Dashboard
+              Return to Student Dashboard
             </button>
           </div>
         </div>
